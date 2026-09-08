@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🎮 Kids Code 3D</title>
+  <!-- Opening this source file via file:// cannot load npm packages. Send them to the bundled app. -->
+  <script id="file-protocol-redirect">
+    (function () {
+      if (location.protocol !== 'file:') return;
+      var path = location.pathname || '';
+      if (!/index\.html$/i.test(path)) return;
+      location.replace(location.href.replace(/index\.html$/i, 'KidsCode3D.html'));
+    })();
+  </script>
+  <link rel="stylesheet" href="./src/styles/main.css" />
+</head>
+<body>
+  <!-- Top toolbar -->
+  <div id="toolbar">
+    <div class="toolbar-left">
+      <span class="app-title">🎮 Kids Code 3D</span>
+    </div>
+    <div class="toolbar-center">
+      <button id="btn-run" class="tb-btn run" title="Run your code">▶ Run</button>
+      <button id="btn-stop" class="tb-btn stop" title="Stop running code">■ Stop</button>
+      <button id="btn-reset" class="tb-btn reset" title="Reset everything">↻ Reset</button>
+      <button id="btn-clear" class="tb-btn" title="Clear all objects">🗑 Clear</button>
+      <button id="btn-level" class="tb-btn" title="Load the default playground">📦 Level</button>
+      <div class="dropdown">
+        <button id="btn-example" class="tb-btn" title="Load an example">📄 Example ▾</button>
+        <div id="example-menu" class="dropdown-menu hidden">
+          <button data-example="cube">🟥 Create a Cube</button>
+          <button data-example="physics">🧱 Falling Objects</button>
+          <button data-example="animation">🔄 Spinning Object</button>
+          <button data-example="tower">🏗 Build a Tower</button>
+          <button data-example="coin">⭐ Collect a Coin</button>
+          <button data-example="cake">🎂 Collect a Cake</button>
+        </div>
+      </div>
+      <button id="btn-save" class="tb-btn" title="Save code to browser">💾 Save</button>
+      <button id="btn-settings" class="tb-btn" title="Open settings" aria-haspopup="dialog" aria-controls="settings-dialog" aria-expanded="false">⚙ Settings</button>
+    </div>
+    <div class="toolbar-right">
+      <button id="btn-console" class="tb-btn small" title="Toggle console">🖥</button>
+      <button id="btn-fs" class="tb-btn small" title="Fullscreen viewport">⛶</button>
+    </div>
+  </div>
+
+  <!-- Main split layout -->
+  <div id="main">
+    <!-- Left: code editor -->
+    <div id="editor-pane">
+      <div id="editor-container"></div>
+      <!-- Console panel -->
+      <div id="console-panel" class="hidden">
+        <div id="console-header">
+          <span>Console</span>
+          <button id="console-clear">Clear</button>
+        </div>
+        <div id="console-output"></div>
+      </div>
+    </div>
+
+    <!-- Resize handle -->
+    <div id="resize-handle"></div>
+
+    <!-- Right: 3D viewport -->
+    <div id="viewport-pane">
+      <div id="game-container"></div>
+      <!-- HUD overlay -->
+      <div id="hud-overlay"></div>
+      <!-- Click-to-play overlay -->
+      <div id="play-overlay">
+        <div class="play-message">🎮 Click here to play!<br><small>WASD to move · Mouse to look · Space/Click to jump</small></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="settings-backdrop" class="settings-backdrop hidden">
+    <div id="settings-dialog" class="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <header class="settings-header">
+        <h2 id="settings-title">Settings</h2>
+        <button type="button" id="settings-close" class="settings-close" aria-label="Close settings">✕</button>
+      </header>
+      <div id="settings-body" class="settings-body"></div>
+    </div>
+  </div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
