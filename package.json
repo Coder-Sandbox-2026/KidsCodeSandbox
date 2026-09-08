@@ -1,0 +1,25 @@
+{
+  "name": "kids-coding",
+  "version": "1.0.0",
+  "description": "Kid-friendly 3D game editor for learning JavaScript",
+  "type": "module",
+  "scripts": {
+    "start": "vite --open index.html",
+    "dev": "vite",
+    "build": "vite build && node scripts/inline-build.js",
+    "preview": "vite preview",
+    "test": "node --test src/engine/playerSettings.test.js src/engine/collisionMeshes.test.js src/editor/codeCoach.test.js src/editor/completionEngine.test.js src/settings/appSettings.test.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@dimforge/rapier3d-compat": "^0.20.0",
+    "monaco-editor": "^0.56.0",
+    "three": "^0.185.1"
+  },
+  "devDependencies": {
+    "vite": "^6.4.3",
+    "vite-plugin-singlefile": "^2.3.3"
+  }
+}
