@@ -7,6 +7,7 @@ import * as monaco from 'monaco-editor';
 import { typescript as monacoTypescript } from 'monaco-editor';
 import { registerAutocomplete } from './AutocompleteProvider.js';
 import { GAME_API_DTS } from './gameApiTypes.js';
+import { bindHoverDisclosureLayout } from './hoverLayout.js';
 
 registerAutocomplete(monaco);
 
@@ -107,7 +108,7 @@ export class EditorManager {
       acceptSuggestionOnCommitCharacter: true,
       acceptSuggestionOnEnter: 'on',
       parameterHints: { enabled: true },
-      hover: { enabled: true, delay: 200 },
+      hover: { enabled: true, delay: 200, sticky: true, hidingDelay: 300 },
       bracketPairColorization: { enabled: true },
       autoClosingBrackets: 'always',
       autoClosingQuotes: 'always',
@@ -123,6 +124,7 @@ export class EditorManager {
         localityBonus: true,
       },
     });
+    bindHoverDisclosureLayout(this.editor);
   }
 
   getCode() {

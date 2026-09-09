@@ -14,6 +14,7 @@ import {
   findHoverEntry,
 } from './apiCompletions.js';
 import { buildCompletion, isInCommentOrString, wordRangeFromMonaco } from './completionEngine.js';
+import { buildHover } from './hoverDocs.js';
 
 export function registerAutocomplete(monaco) {
   const kindMap = {
@@ -66,7 +67,7 @@ export function registerAutocomplete(monaco) {
   });
 
   monaco.languages.registerHoverProvider('javascript', {
-    provideHover(model, position) {
+    provideHover(model, position, _token, context) {
       const word = model.getWordAtPosition(position);
       if (!word) return null;
       const entry = findHoverEntry(word.word);
@@ -76,10 +77,7 @@ export function registerAutocomplete(monaco) {
           position.lineNumber, word.startColumn,
           position.lineNumber, word.endColumn
         ),
-        contents: [
-          { value: `**${entry.label}**` },
-          { value: '```\n' + (entry.doc || entry.detail || '') + '\n```' },
-        ],
+        ...buildHover(entry, context),
       };
     },
   });

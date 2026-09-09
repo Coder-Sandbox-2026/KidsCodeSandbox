@@ -231,6 +231,9 @@ export class GameAPI {
       createGoldCoin: wrapCreate(this.models.createGoldCoin),
       createCake: wrapCreate(this.models.createCake),
 
+      playExplosion: (opts) => engine.vfx?.playEmberExplosion(opts),
+      playEmberExplosion: (opts) => engine.vfx?.playEmberExplosion(opts),
+
       print: (text, opts) => {
         this.hud.print(text, opts);
         this._consoleFn(String(text), 'info');

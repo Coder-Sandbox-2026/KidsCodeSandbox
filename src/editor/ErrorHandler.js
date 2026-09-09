@@ -17,6 +17,8 @@ const TYPO_SUGGESTIONS = {
   'createGoldcoin': 'createGoldCoin',
   'createCoin': 'createGoldCoin',
   'createcake': 'createCake',
+  'playExplosin': 'playExplosion',
+  'playExploision': 'playExplosion',
 };
 
 export function formatFriendlyError(error, userCode) {

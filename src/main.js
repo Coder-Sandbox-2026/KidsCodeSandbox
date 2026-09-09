@@ -16,6 +16,7 @@ import animationExample from './examples/animation.js';
 import towerExample from './examples/tower.js';
 import coinExample from './examples/coin.js';
 import cakeExample from './examples/cake.js';
+import explosionExample from './examples/explosion.js';
 
 const EXAMPLES = {
   cube: cubeExample,
@@ -24,6 +25,7 @@ const EXAMPLES = {
   tower: towerExample,
   coin: coinExample,
   cake: cakeExample,
+  explosion: explosionExample,
 };
 
 // ===== Bootstrap =====
@@ -153,6 +155,13 @@ const EXAMPLES = {
   document.getElementById('btn-save').addEventListener('click', () => {
     editor.save();
     logToConsole('💾 Code saved!', 'info');
+  });
+
+  document.getElementById('btn-vfx').addEventListener('click', () => {
+    engine.resume();
+    playOverlay.classList.add('hidden');
+    engine.vfx.playEmberExplosion();
+    logToConsole('💥 Playing ember explosion in front of the camera. Watch the viewport!', 'info');
   });
 
   // ---- Example dropdown ----

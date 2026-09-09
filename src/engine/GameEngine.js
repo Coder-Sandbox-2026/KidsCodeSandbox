@@ -8,6 +8,7 @@ import { PhysicsManager } from './PhysicsManager.js';
 import { ModelLoader } from './ModelLoader.js';
 import { Player } from '../api/Player.js';
 import { DefaultLevel } from './DefaultLevel.js';
+import { VFXManager } from './VFXManager.js';
 import * as THREE from 'three';
 
 export class GameEngine {
@@ -21,6 +22,7 @@ export class GameEngine {
     this.models = null;
     this.player = null;
     this.level = null;
+    this.vfx = null;
 
     // State
     this.running = false;
@@ -69,6 +71,9 @@ export class GameEngine {
 
     // Default level
     this.level = new DefaultLevel(this.sceneManager.scene, this.physics);
+
+    // Visual effects (ember explosion, …)
+    this.vfx = new VFXManager(this);
 
     // Crosshair
     const ch = document.createElement('div');
@@ -204,6 +209,8 @@ export class GameEngine {
       try { cb(dt); } catch (e) { /* swallow per-frame errors once */ }
     }
 
+    this.vfx?.update(dt);
+
     this.renderer.render(this.sceneManager.scene, this.sceneManager.camera);
   }
 
@@ -242,6 +249,7 @@ export class GameEngine {
     }
     this.userMeshes = [];
     this.userUpdateCallbacks = [];
+    this.vfx?.clear();
   }
 
   /** Full reset – clears user objects, rebuilds level, resets player */

@@ -130,6 +130,31 @@ declare function createPlane(options?: ShapeOptions): GameObject;
 declare function createGoldCoin(options?: ShapeOptions): GameObject;
 declare function createCake(options?: ShapeOptions): GameObject;
 
+interface ExplosionOptions {
+  /** World position, like [0, 2, -8]. Skip this to play in front of you. */
+  position?: [number, number, number] | number[] | Vec3;
+  /** How many embers fly inward */
+  emberCount?: number;
+  /** How far away embers spawn */
+  spawnRadius?: number;
+  /** Seconds of ember gathering before the boom */
+  convergenceDuration?: number;
+  chargeDuration?: number;
+  explosionRadius?: number;
+  explosionDuration?: number;
+  /** Show helper rings in the 3D world */
+  debug?: boolean;
+  loop?: boolean;
+}
+
+/**
+ * Play the ember explosion effect.
+ * With no arguments, it plays in front of the camera.
+ */
+declare function playExplosion(options?: ExplosionOptions | GameObject | Player | [number, number, number]): void;
+/** Same as playExplosion — the VFX module's calling method. */
+declare function playEmberExplosion(options?: ExplosionOptions | GameObject | Player | [number, number, number]): void;
+
 declare function print(text: string, options?: PrintOptions): void;
 declare function setText(id: string, text: string, options?: PrintOptions): void;
 declare function clearText(): void;

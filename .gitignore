@@ -1,6 +1,18 @@
+# Installed and built locally. GitHub Actions runs npm ci + npm run build.
 node_modules/
 dist/
+KidsCode3D.html
+
+# Local Windows / USB pack. Not used by GitHub Pages.
 offline/
+start.bat
+
+# OS / editor / secrets
 .DS_Store
 Thumbs.db
-
+*.log
+.env
+.env.*
+.vscode/
+.idea/
+*.local

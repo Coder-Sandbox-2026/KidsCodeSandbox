@@ -10,7 +10,12 @@
  * These are API templates, not full-statement snippets.
  * "const player = getPlayer();" is a statement snippet and must not
  * be used as the normal getPlayer completion.
+ *
+ * Methods that take an optional object-literal also set `options` so hover
+ * can show a collapsed summary plus "See all options".
  */
+import { optionField } from './hoverDocs.js';
+
 export function call(name, guided, high = guided, extras = {}) {
   return { kind: 'token', off: name, basic: `${name}()`, guided, high, ...extras };
 }
@@ -25,6 +30,68 @@ export function ident(name, assigned) {
   };
 }
 
+/** Options for createCube / createSphere / createCone / createCylinder / createPlane / createGoldCoin / createCake */
+export const SHAPE_OPTIONS = [
+  optionField('position', '[x, y, z]', 'Where to put the object in the world.', { example: '[0, 3, -5]' }),
+  optionField('scale', 'a number or [x, y, z]', 'How big the object is.', { example: '2' }),
+  optionField('color', 'text', 'A color name like "red" or a hex code like "#ff0000".', { example: '"red"' }),
+  optionField('physics', 'true or false', 'If true, the object falls and can be pushed.', { example: 'true' }),
+  optionField('collision', 'true or false', 'If true, the object notices when something touches it. This does not make it fall.', { example: 'true' }),
+  optionField('mass', 'a number', 'How heavy the object is when physics is on.', { example: '1' }),
+  optionField('name', 'text', 'A name so you can find the object later.', { example: '"box"' }),
+  optionField('bounciness', 'a number from 0 to 1', 'How much the object bounces.', { example: '0.5' }),
+  optionField('friction', 'a number from 0 to 1', 'How much the object grips when it slides.', { example: '0.5' }),
+];
+
+/** Options for print() and setText() */
+export const PRINT_OPTIONS = [
+  optionField('x', 'a number', 'Left-to-right position on the screen, in pixels.', { example: '20' }),
+  optionField('y', 'a number', 'Top-to-bottom position on the screen, in pixels.', { example: '20' }),
+  optionField('color', 'text', 'A CSS color for the text.', { example: '"yellow"' }),
+  optionField('size', 'a number', 'Font size in pixels.', { example: '24' }),
+  optionField('duration', 'a number', 'How many seconds the text stays on screen. Default is 10. Use 0 to keep it forever.', { example: '30' }),
+];
+
+/** Options for playExplosion() / playEmberExplosion() */
+export const EXPLOSION_OPTIONS = [
+  optionField('position', '[x, y, z]', 'Where the explosion happens. Skip this to play it in front of you.', { example: '[0, 2, -8]' }),
+  optionField('emberCount', 'a number', 'How many embers fly inward.', { example: '360' }),
+  optionField('spawnRadius', 'a number', 'How far away the embers start from.', { example: '10' }),
+  optionField('convergenceDuration', 'a number', 'Seconds of ember gathering before the boom.', { example: '3' }),
+  optionField('chargeDuration', 'a number', 'Seconds the glowing core holds before it explodes.', { example: '1.2' }),
+  optionField('explosionRadius', 'a number', 'How wide the blast is.', { example: '8' }),
+  optionField('explosionDuration', 'a number', 'How many seconds the blast lasts.', { example: '2' }),
+  optionField('debug', 'true or false', 'Show helper rings in the 3D world.', { example: 'true' }),
+  optionField('loop', 'true or false', 'Play the explosion again after it finishes.', { example: 'true' }),
+];
+
+export const ENABLE_PHYSICS_OPTIONS = [
+  optionField('mass', 'a number', 'How heavy the object is.', { example: '1' }),
+  optionField('bounciness', 'a number from 0 to 1', 'How much the object bounces.', { example: '0.5' }),
+  optionField('friction', 'a number from 0 to 1', 'How much the object grips when it slides.', { example: '0.5' }),
+];
+
+export const SET_PHYSICS_OPTIONS = [
+  optionField('enabled', 'true or false', 'Turn falling and being pushed on or off.', { example: 'true' }),
+  ...ENABLE_PHYSICS_OPTIONS,
+];
+
+export const SET_COLLISION_OPTIONS = [
+  optionField('enabled', 'true or false', 'Turn touch detection on or off.', { example: 'true' }),
+];
+
+export const PLAYER_SETTING_OPTIONS = [
+  optionField('walkSpeed', 'a number', 'How fast the player walks. Must be 0 or greater.', { example: '8' }),
+  optionField('jumpForce', 'a number', 'How strong the jump is. Must be 0 or greater.', { example: '12' }),
+  optionField('gravity', 'a number', 'How fast the player falls. Must be 0 or greater.', { example: '20' }),
+  optionField('airControl', 'a number from 0 to 1', 'How well you can steer while jumping (0 = none, 1 = full).', { example: '0.5' }),
+  optionField('maxFallSpeed', 'a number', 'The fastest the player can fall.', { example: '40' }),
+  optionField('acceleration', 'a number', 'How quickly the player reaches walk speed.', { example: '20' }),
+  optionField('deceleration', 'a number', 'How quickly the player stops when you let go of WASD.', { example: '20' }),
+  optionField('jumpCount', 'a whole number', 'How many jumps you get before you must land. Use 2 for a double jump.', { example: '2' }),
+  optionField('movementEnabled', 'true or false', 'Set false to freeze walking and jumping. Looking around still works.', { example: 'true' }),
+];
+
 /** Global API completions */
 export const API_DOCS = [
   {
@@ -32,6 +99,7 @@ export const API_DOCS = [
     kind: 'Function',
     detail: 'Create a cube in the game world',
     doc: 'createCube(options)\n\nCreates a cube.\n\nOptions: position, scale, color, physics, mass, name\n\nExample:\ncreateCube({ position: [0, 5, 0], color: "red" });',
+    options: SHAPE_OPTIONS,
     completion: call(
       'createCube',
       'createCube({\n\tposition: [0, 3, -5],\n\tcolor: "${1:red}"\n})',
@@ -43,6 +111,7 @@ export const API_DOCS = [
     kind: 'Function',
     detail: 'Create a sphere in the game world',
     doc: 'createSphere(options)\n\nCreates a sphere.\n\nOptions: position, scale, color, physics, mass, name',
+    options: SHAPE_OPTIONS,
     completion: call(
       'createSphere',
       'createSphere({\n\tposition: [0, 3, -5],\n\tcolor: "${1:blue}"\n})',
@@ -54,6 +123,7 @@ export const API_DOCS = [
     kind: 'Function',
     detail: 'Create a cone',
     doc: 'createCone(options)',
+    options: SHAPE_OPTIONS,
     completion: call(
       'createCone',
       'createCone({\n\tposition: [0, 3, -5],\n\tcolor: "${1:green}"\n})',
@@ -65,6 +135,7 @@ export const API_DOCS = [
     kind: 'Function',
     detail: 'Create a cylinder',
     doc: 'createCylinder(options)',
+    options: SHAPE_OPTIONS,
     completion: call(
       'createCylinder',
       'createCylinder({\n\tposition: [0, 3, -5],\n\tcolor: "${1:yellow}"\n})',
@@ -76,6 +147,7 @@ export const API_DOCS = [
     kind: 'Function',
     detail: 'Create a flat plane',
     doc: 'createPlane(options)',
+    options: SHAPE_OPTIONS,
     completion: call(
       'createPlane',
       'createPlane({\n\tposition: [0, 0, -5],\n\tcolor: "${1:white}"\n})',
@@ -87,6 +159,7 @@ export const API_DOCS = [
     kind: 'Function',
     detail: 'Place a gold coin you can collect',
     doc: 'createGoldCoin(options)\n\nPlaces a gold coin in the world.\nIt notices when the player touches it, but it does not fall\nor get pushed (unless you call enablePhysics()).\n\nOptions: position, scale, color, name, collision, physics\n\nExample:\nconst coin = createGoldCoin({ position: [0, 1, 2] });\ncoin.onCollision((other) => {\n  if (other && other.isPlayer()) {\n    coin.destroy();\n    print("You got a coin!");\n  }\n});',
+    options: SHAPE_OPTIONS,
     completion: call(
       'createGoldCoin',
       'createGoldCoin({\n\tposition: [0, 1, 2]\n})',
@@ -98,6 +171,7 @@ export const API_DOCS = [
     kind: 'Function',
     detail: 'Place a cake you can collect',
     doc: 'createCake(options)\n\nPlaces a cake in the world.\nIt notices when the player touches it, but it does not fall\nor get pushed (unless you call enablePhysics()).\n\nOptions: position, scale, color, name, collision, physics\n\nExample:\nconst cake = createCake({ position: [0, 1, 2] });\ncake.onCollision((other) => {\n  if (other && other.isPlayer()) {\n    cake.destroy();\n    print("Yum!");\n  }\n});',
+    options: SHAPE_OPTIONS,
     completion: call(
       'createCake',
       'createCake({\n\tposition: [0, 1, 2]\n})',
@@ -105,10 +179,35 @@ export const API_DOCS = [
     ),
   },
   {
+    label: 'playExplosion',
+    kind: 'Function',
+    detail: 'Play the ember explosion effect',
+    doc: 'playExplosion(options)\n\nPlays a fire ember explosion in the 3D world.\nWith no arguments, it plays in front of you.\n\nOptions: position, emberCount, spawnRadius, debug\n\nExample:\nplayExplosion();\nplayExplosion({ position: [0, 2, -8] });\nonKeyPressed("KeyE", () => playExplosion());',
+    options: EXPLOSION_OPTIONS,
+    completion: call(
+      'playExplosion',
+      'playExplosion()',
+      'playExplosion({\n\tposition: [0, 2, -8]\n})'
+    ),
+  },
+  {
+    label: 'playEmberExplosion',
+    kind: 'Function',
+    detail: 'Play the ember explosion effect (same as playExplosion)',
+    doc: 'playEmberExplosion(options)\n\nSame as playExplosion(). This is the VFX module calling method.',
+    options: EXPLOSION_OPTIONS,
+    completion: call(
+      'playEmberExplosion',
+      'playEmberExplosion()',
+      'playEmberExplosion({\n\tposition: [0, 2, -8]\n})'
+    ),
+  },
+  {
     label: 'print',
     kind: 'Function',
     detail: 'Show text on screen',
     doc: 'print(text, options)\n\nShows text in the game for 10 seconds (then it disappears).\n\nOptions:\n  x, y     – screen position in pixels\n  color    – CSS color\n  size     – font size in pixels\n  duration – how many seconds to show (default 10)\n\nLines that share the same x and y stack together.\nWhen a line expires, the ones below it move up.\n\nprint("Hello!");\nprint("Stay longer", { duration: 30 });',
+    options: PRINT_OPTIONS,
     completion: call('print', 'print("${1:Hello!}")'),
   },
   {
@@ -116,6 +215,7 @@ export const API_DOCS = [
     kind: 'Function',
     detail: 'Set named text on screen',
     doc: 'setText(id, text, options)',
+    options: PRINT_OPTIONS,
     completion: call('setText', 'setText("${1:score}", "${2:Score: 0}")'),
   },
   {
@@ -233,6 +333,7 @@ export const MEMBER_DOCS = [
     detail: 'Make this object fall and get pushed',
     doc: 'object.enablePhysics()\n\nTurns on gravity and momentum.\nThe object becomes solid (the player cannot walk through it).\nThis is separate from enableCollision().',
     completion: call('enablePhysics', 'enablePhysics()'),
+    options: ENABLE_PHYSICS_OPTIONS,
   },
   {
     label: 'disablePhysics',
@@ -241,7 +342,7 @@ export const MEMBER_DOCS = [
     doc: 'object.disablePhysics()\n\nTurns off gravity and momentum.\nCollision detection stays on if you already enabled it.',
     completion: call('disablePhysics', 'disablePhysics()'),
   },
-  { label: 'setPhysics', kind: 'Method', detail: 'Configure physics', completion: call('setPhysics', 'setPhysics({ enabled: true })', 'setPhysics({ enabled: true, mass: ${1:1} })') },
+  { label: 'setPhysics', kind: 'Method', detail: 'Configure physics', completion: call('setPhysics', 'setPhysics({ enabled: true })', 'setPhysics({ enabled: true, mass: ${1:1} })'), options: SET_PHYSICS_OPTIONS },
   {
     label: 'enableCollision',
     kind: 'Method',
@@ -260,6 +361,7 @@ export const MEMBER_DOCS = [
     kind: 'Method',
     detail: 'Turn collision detection on or off',
     completion: call('setCollision', 'setCollision({ enabled: true })', 'setCollision({ enabled: ${1:true} })'),
+    options: SET_COLLISION_OPTIONS,
   },
   { label: 'physicsEnabled', kind: 'Property', detail: 'True if this object can fall', completion: ident('physicsEnabled') },
   { label: 'collisionEnabled', kind: 'Property', detail: 'True if this object notices touches', completion: ident('collisionEnabled') },
@@ -321,6 +423,7 @@ export const PLAYER_DOCS = [
     kind: 'Method',
     detail: 'Change several player settings at once',
     doc: 'player.setSettings(settings)\n\nChange several player settings at once.\n\nExample:\nplayer.setSettings({\n  walkSpeed: 8,\n  jumpForce: 12,\n  gravity: 20\n});',
+    options: PLAYER_SETTING_OPTIONS,
     completion: call(
       'setSettings',
       'setSettings({\n\twalkSpeed: ${1:8},\n\tjumpForce: ${2:12}\n})',

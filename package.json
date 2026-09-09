@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "vite build && node scripts/inline-build.js",
     "preview": "vite preview",
-    "test": "node --test src/engine/playerSettings.test.js src/engine/collisionMeshes.test.js src/editor/codeCoach.test.js src/editor/completionEngine.test.js src/settings/appSettings.test.js"
+    "test": "node --test src/engine/playerSettings.test.js src/engine/collisionMeshes.test.js src/editor/codeCoach.test.js src/editor/completionEngine.test.js src/editor/hoverDocs.test.js src/settings/appSettings.test.js"
   },
   "keywords": [],
   "author": "",
