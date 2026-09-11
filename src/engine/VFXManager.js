@@ -3,54 +3,76 @@
  * and wraps the bundled ember explosion so kid code can call playExplosion().
  */
 import * as THREE from 'three';
-import { playEmberExplosion } from '../vfx/ember-explosion-vfx/index.js';
+import {
+  EMBER_EXPLOSION_PHASES,
+  loadVfxTextures,
+  playEmberExplosion,
+} from '../vfx/ember-explosion-vfx/index.js';
 
 const _forward = new THREE.Vector3();
 
-/** Defaults sized for the first-person playground (the bundled cinematic defaults are huge). */
+/** Internal timing / density defaults sized for the first-person playground. */
 const PLAYGROUND_DEFAULTS = {
   emberCount: 360,
-  spawnRadius: 10,
   convergenceDuration: 3.0,
   chargeDuration: 1.2,
-  explosionRadius: 8,
   explosionDuration: 2.0,
 };
 
+const DEFAULT_RADIUS = 3;
+const MAX_RADIUS = 10;
 const MAX_ACTIVE = 3;
 
 export class VFXManager {
   constructor(engine) {
     this.engine = engine;
     this._effects = new Set();
+    this._texturesPromise = loadVfxTextures().catch((err) => {
+      console.warn('[vfx] Could not load explosion textures:', err);
+      return null;
+    });
   }
 
   /**
    * Play the ember explosion. Position can be omitted (in front of the camera),
-   * a [x, y, z] array, a Vector3, a { x, y, z } object, or a game object.
-   * Extra options are passed through to the VFX module (emberCount, debug, …).
+   * a [x, y, z] array, a Vector3, a { x, y, z } object, or a game object / player.
+   * Options objects only use position and radius (default 3, max 10).
    */
-  playEmberExplosion(options) {
+  async playEmberExplosion(options) {
     const scene = this.engine.scene;
     if (!scene) return null;
 
     const config = normalizePlayOptions(options);
     const position = toVector3(config.position) || inFrontOfCamera(this.engine.camera);
+    const explosionRadius = resolveRadius(config.radius);
+    const spawnRadius =10;//explosionRadius * 1.2;
+    const textures = await this._texturesPromise;
+
+    let effect;
+    try {
+      effect = await playEmberExplosion(scene, {
+        ...PLAYGROUND_DEFAULTS,
+        explosionRadius,
+        spawnRadius,
+        position,
+        ...(textures ? { textures } : {}),
+      });
+    } catch (err) {
+      console.warn('[vfx] Could not play ember explosion:', err);
+      return null;
+    }
 
     while (this._effects.size >= MAX_ACTIVE) {
       const oldest = this._effects.values().next().value;
       this._disposeEffect(oldest);
     }
 
-    const effect = playEmberExplosion(scene, {
-      ...PLAYGROUND_DEFAULTS,
-      ...config,
-      position,
-    });
-
     this._effects.add(effect);
     effect.on('finished', () => {
       if (!effect.config?.loop) this._disposeEffect(effect);
+    });
+    effect.on('phase', ({ phase }) => {
+      this._handleExplosionPhase(phase);
     });
     return effect;
   }
@@ -72,6 +94,23 @@ export class VFXManager {
     this._effects.delete(effect);
     try { effect.dispose(); } catch { /* already gone */ }
   }
+
+  _handleExplosionPhase(phase) {
+    switch (phase) {
+      case EMBER_EXPLOSION_PHASES.CONVERGING:
+        break;
+      case EMBER_EXPLOSION_PHASES.CHARGING:
+        break;
+      case EMBER_EXPLOSION_PHASES.EXPLODING:
+        break;
+      case EMBER_EXPLOSION_PHASES.FADING:
+        break;
+      case EMBER_EXPLOSION_PHASES.COMPLETE:
+        break;
+      default:
+        break;
+    }
+  }
 }
 
 function normalizePlayOptions(options) {
@@ -79,7 +118,17 @@ function normalizePlayOptions(options) {
   if (isVec3Like(options)) return { position: options };
   if (typeof options !== 'object') return {};
   if (isGameActor(options)) return { position: options.position };
-  return { ...options };
+  return {
+    position: options.position,
+    radius: options.radius,
+  };
+}
+
+function resolveRadius(radius) {
+  if (radius == null || radius === '') return DEFAULT_RADIUS;
+  const value = Number(radius);
+  if (!Number.isFinite(value)) return DEFAULT_RADIUS;
+  return Math.min(MAX_RADIUS, Math.max(0, value));
 }
 
 function isGameActor(value) {
@@ -97,7 +146,7 @@ function isVec3Like(value) {
     && typeof value.y === 'number'
     && typeof value.z === 'number'
     && value.position == null
-    && value.emberCount == null;
+    && value.radius == null;
 }
 
 function toVector3(value) {

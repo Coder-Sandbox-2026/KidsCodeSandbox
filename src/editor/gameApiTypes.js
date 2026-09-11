@@ -133,23 +133,14 @@ declare function createCake(options?: ShapeOptions): GameObject;
 interface ExplosionOptions {
   /** World position, like [0, 2, -8]. Skip this to play in front of you. */
   position?: [number, number, number] | number[] | Vec3;
-  /** How many embers fly inward */
-  emberCount?: number;
-  /** How far away embers spawn */
-  spawnRadius?: number;
-  /** Seconds of ember gathering before the boom */
-  convergenceDuration?: number;
-  chargeDuration?: number;
-  explosionRadius?: number;
-  explosionDuration?: number;
-  /** Show helper rings in the 3D world */
-  debug?: boolean;
-  loop?: boolean;
+  /** How wide the blast is. Default 3. Max 10. */
+  radius?: number;
 }
 
 /**
  * Play the ember explosion effect.
  * With no arguments, it plays in front of the camera.
+ * Pass a player or object to play it at that actor.
  */
 declare function playExplosion(options?: ExplosionOptions | GameObject | Player | [number, number, number]): void;
 /** Same as playExplosion — the VFX module's calling method. */

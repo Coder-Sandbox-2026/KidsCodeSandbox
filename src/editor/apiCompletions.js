@@ -55,14 +55,7 @@ export const PRINT_OPTIONS = [
 /** Options for playExplosion() / playEmberExplosion() */
 export const EXPLOSION_OPTIONS = [
   optionField('position', '[x, y, z]', 'Where the explosion happens. Skip this to play it in front of you.', { example: '[0, 2, -8]' }),
-  optionField('emberCount', 'a number', 'How many embers fly inward.', { example: '360' }),
-  optionField('spawnRadius', 'a number', 'How far away the embers start from.', { example: '10' }),
-  optionField('convergenceDuration', 'a number', 'Seconds of ember gathering before the boom.', { example: '3' }),
-  optionField('chargeDuration', 'a number', 'Seconds the glowing core holds before it explodes.', { example: '1.2' }),
-  optionField('explosionRadius', 'a number', 'How wide the blast is.', { example: '8' }),
-  optionField('explosionDuration', 'a number', 'How many seconds the blast lasts.', { example: '2' }),
-  optionField('debug', 'true or false', 'Show helper rings in the 3D world.', { example: 'true' }),
-  optionField('loop', 'true or false', 'Play the explosion again after it finishes.', { example: 'true' }),
+  optionField('radius', 'a number', 'How wide the blast is. Default is 3. The biggest you can use is 10.', { example: '3' }),
 ];
 
 export const ENABLE_PHYSICS_OPTIONS = [
@@ -182,12 +175,12 @@ export const API_DOCS = [
     label: 'playExplosion',
     kind: 'Function',
     detail: 'Play the ember explosion effect',
-    doc: 'playExplosion(options)\n\nPlays a fire ember explosion in the 3D world.\nWith no arguments, it plays in front of you.\n\nOptions: position, emberCount, spawnRadius, debug\n\nExample:\nplayExplosion();\nplayExplosion({ position: [0, 2, -8] });\nonKeyPressed("KeyE", () => playExplosion());',
+    doc: 'playExplosion(options)\n\nPlays a fire ember explosion in the 3D world.\nWith no arguments, it plays in front of you.\nYou can also pass a player or object to play it there.\n\nOptions: position, radius\n\nExample:\nplayExplosion();\nplayExplosion({ position: [0, 2, -8], radius: 3 });\nonKeyPressed("KeyE", () => playExplosion());',
     options: EXPLOSION_OPTIONS,
     completion: call(
       'playExplosion',
       'playExplosion()',
-      'playExplosion({\n\tposition: [0, 2, -8]\n})'
+      'playExplosion({\n\tposition: [0, 2, -8],\n\tradius: ${1:3}\n})'
     ),
   },
   {
@@ -199,7 +192,7 @@ export const API_DOCS = [
     completion: call(
       'playEmberExplosion',
       'playEmberExplosion()',
-      'playEmberExplosion({\n\tposition: [0, 2, -8]\n})'
+      'playEmberExplosion({\n\tposition: [0, 2, -8],\n\tradius: ${1:3}\n})'
     ),
   },
   {
