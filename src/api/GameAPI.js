@@ -211,10 +211,13 @@ export class GameAPI {
   }
 
   /** Build the flat API dictionary injected as globals into user code */
-  buildScope() {
+  buildScope(run) {
+    run.assertActive();
     const self = this;
     const engine = this.engine;
-    const kidConsole = this._createConsole();
+    const kidConsole = Object.freeze(Object.fromEntries(
+      Object.entries(this._createConsole()).map(([name, fn]) => [name, run.bind(fn)])
+    ));
 
     const wrapCreate = (fn) => (opts) => {
       const obj = fn(opts);
@@ -222,7 +225,7 @@ export class GameAPI {
       return obj;
     };
 
-    return {
+    const scope = {
       createCube: wrapCreate(this.shapes.createCube),
       createSphere: wrapCreate(this.shapes.createSphere),
       createCone: wrapCreate(this.shapes.createCone),
@@ -231,9 +234,9 @@ export class GameAPI {
       createGoldCoin: wrapCreate(this.models.createGoldCoin),
       createCake: wrapCreate(this.models.createCake),
 
-      playExplosion: (opts) => { engine.vfx?.playEmberExplosion(opts); },
-      playEmberExplosion: (opts) => { engine.vfx?.playEmberExplosion(opts); },
-      createTyphoon: (opts) => { engine.vfx?.createTyphoon(opts); },
+      playExplosion: (opts) => { engine.vfx?.playEmberExplosion(opts, run); },
+      playEmberExplosion: (opts) => { engine.vfx?.playEmberExplosion(opts, run); },
+      createTyphoon: (opts) => { engine.vfx?.createTyphoon(opts, run); },
 
       print: (text, opts) => {
         this.hud.print(text, opts);
@@ -245,7 +248,7 @@ export class GameAPI {
       update: (fn) => { engine.userUpdateCallbacks.push(fn); },
       onUpdate: (fn) => { engine.userUpdateCallbacks.push(fn); },
 
-      wait: (ms) => new Promise(resolve => setTimeout(resolve, ms)),
+      wait: (ms) => run.wait(ms),
       random: (min = 0, max = 1) => min + Math.random() * (max - min),
       distance: (a, b) => {
         const pa = a.position || a;
@@ -274,6 +277,9 @@ export class GameAPI {
       Math,
       console: kidConsole,
     };
+    return Object.fromEntries(Object.entries(scope).map(([name, value]) => [
+      name, typeof value === 'function' ? run.bind(value) : value,
+    ]));
   }
 
   reset() {

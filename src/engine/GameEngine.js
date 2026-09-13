@@ -9,11 +9,13 @@ import { ModelLoader } from './ModelLoader.js';
 import { Player } from '../api/Player.js';
 import { DefaultLevel } from './DefaultLevel.js';
 import { VFXManager } from './VFXManager.js';
+import { RunLifecycle } from './RunLifecycle.js';
 import * as THREE from 'three';
 
 export class GameEngine {
   constructor(container) {
     this.container = container;
+    this.runs = new RunLifecycle();
 
     // Subsystems (initialized in init())
     this.renderer = null;
@@ -221,6 +223,12 @@ export class GameEngine {
 
   // --- Lifecycle controls ---
 
+  beginStudentRun() {
+    const run = this.runs.begin();
+    this.clearUserObjects();
+    return run;
+  }
+
   /** Load the default playground level */
   loadLevel() {
     if (this.levelLoaded) return;
@@ -255,6 +263,7 @@ export class GameEngine {
 
   /** Full reset – clears user objects, rebuilds level, resets player */
   reset() {
+    this.runs.invalidate();
     this.clearUserObjects();
     this.vfx?.releaseTyphoonTextures();
     this.level.clear();
@@ -269,6 +278,7 @@ export class GameEngine {
 
   /** Clear the entire scene (including level) */
   clearScene() {
+    this.runs.invalidate();
     this.clearUserObjects();
     this.vfx?.releaseTyphoonTextures();
     this.level.clear();

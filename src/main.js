@@ -96,7 +96,7 @@ const EXAMPLES = {
   // ---- Code execution ----
   async function runCode() {
     // Clean up previous run
-    engine.clearUserObjects();
+    const run = engine.beginStudentRun();
     api.reset();
     consoleOutput.innerHTML = '';
     editor._clearDecorations();
@@ -106,25 +106,18 @@ const EXAMPLES = {
     engine.resume();
 
     const code = editor.getCode();
-    const scope = api.buildScope();
+    const scope = api.buildScope(run);
 
-    // Build function argument names and values
-    const argNames = Object.keys(scope);
-    const argValues = Object.values(scope);
-
-    try {
-      // Wrap in async function so kids can use `await`
-      const asyncWrapper = new Function(
-        ...argNames,
-        `"use strict"; return (async () => {\n${code}\n})();`
-      );
-      await asyncWrapper(...argValues);
-      logToConsole('✅ Code is running!', 'info');
-    } catch (err) {
-      const { friendly, line } = formatFriendlyError(err, code);
-      logToConsole(friendly, 'error');
-      editor.highlightError(line);
-    }
+    await run.execute(code, scope, {
+      success: () => {
+        logToConsole('✅ Code is running!', 'info');
+      },
+      error: (err) => {
+        const { friendly, line } = formatFriendlyError(err, code);
+        logToConsole(friendly, 'error');
+        editor.highlightError(line);
+      },
+    });
   }
 
   // ---- Toolbar buttons ----

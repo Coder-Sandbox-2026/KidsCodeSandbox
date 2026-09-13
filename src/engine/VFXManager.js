@@ -31,11 +31,19 @@ const DEFAULT_TYPHOON_DURATION = 8;
 const MAX_TYPHOON_DURATION = 30;
 const MAX_ACTIVE = 3;
 
+const EFFECT_MODULES = {
+  loadVfxTextures,
+  loadTyphoonTextures,
+  playEmberExplosion,
+  createTyphoon: spawnTyphoonEffect,
+};
+
 export class VFXManager {
-  constructor(engine) {
+  constructor(engine, effects = EFFECT_MODULES) {
     this.engine = engine;
+    this._modules = effects;
     this._effects = new Set();
-    this._texturesPromise = loadVfxTextures().catch((err) => {
+    this._texturesPromise = effects.loadVfxTextures().catch((err) => {
       console.warn('[vfx] Could not load explosion textures:', err);
       return null;
     });
@@ -48,7 +56,7 @@ export class VFXManager {
    */
   retainTyphoonTextures() {
     if (!this._typhoonTexturesPromise) {
-      this._typhoonTexturesPromise = loadTyphoonTextures().catch((err) => {
+      this._typhoonTexturesPromise = this._modules.loadTyphoonTextures().catch((err) => {
         console.warn('[vfx] Could not load typhoon textures:', err);
         this._typhoonTexturesPromise = null;
         return null;
@@ -72,7 +80,8 @@ export class VFXManager {
    * a [x, y, z] array, a Vector3, a { x, y, z } object, or a game object / player.
    * Options objects only use position and radius (default 3, max 10).
    */
-  async playEmberExplosion(options) {
+  async playEmberExplosion(options, run = null) {
+    if (run && !run.active) return null;
     const scene = this.engine.scene;
     if (!scene) return null;
 
@@ -81,10 +90,13 @@ export class VFXManager {
     const explosionRadius = resolveRadius(config.radius);
     const spawnRadius =10;//explosionRadius * 1.2;
     const textures = await this._texturesPromise;
+    if (run && !run.active) return null;
 
+    // Async loaders may yield again. Build off-scene until ownership is checked.
+    const staging = new THREE.Group();
     let effect;
     try {
-      effect = await playEmberExplosion(scene, {
+      effect = await this._modules.playEmberExplosion(staging, {
         ...PLAYGROUND_DEFAULTS,
         explosionRadius,
         spawnRadius,
@@ -92,9 +104,15 @@ export class VFXManager {
         ...(textures ? { textures } : {}),
       });
     } catch (err) {
-      console.warn('[vfx] Could not play ember explosion:', err);
+      if (!run || run.active) console.warn('[vfx] Could not play ember explosion:', err);
       return null;
     }
+
+    if (run && !run.active) {
+      this._disposeEffect(effect);
+      return null;
+    }
+    scene.add(effect.object3D);
 
     while (this._effects.size >= MAX_ACTIVE) {
       const oldest = this._effects.values().next().value;
@@ -116,7 +134,8 @@ export class VFXManager {
    * a [x, y, z] array, a Vector3, a { x, y, z } object, or a game object / player.
    * Options objects only use position, duration, and radius.
    */
-  async createTyphoon(options) {
+  async createTyphoon(options, run = null) {
+    if (run && !run.active) return null;
     const scene = this.engine.scene;
     if (!scene) return null;
 
@@ -125,19 +144,27 @@ export class VFXManager {
     const radius = resolveTyphoonRadius(config.radius);
     const duration = resolveDuration(config.duration);
     const textures = await this.retainTyphoonTextures();
+    if (run && !run.active) return null;
 
+    const staging = new THREE.Group();
     let effect;
     try {
-      effect = await spawnTyphoonEffect(scene, {
+      effect = await this._modules.createTyphoon(staging, {
         position,
         radius,
         duration,
         ...(textures ? { textures } : {}),
       });
     } catch (err) {
-      console.warn('[vfx] Could not play typhoon:', err);
+      if (!run || run.active) console.warn('[vfx] Could not play typhoon:', err);
       return null;
     }
+
+    if (run && !run.active) {
+      this._disposeEffect(effect);
+      return null;
+    }
+    scene.add(effect.object3D);
 
     while (this._effects.size >= MAX_ACTIVE) {
       const oldest = this._effects.values().next().value;
