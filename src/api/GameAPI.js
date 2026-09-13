@@ -233,6 +233,7 @@ export class GameAPI {
 
       playExplosion: (opts) => { engine.vfx?.playEmberExplosion(opts); },
       playEmberExplosion: (opts) => { engine.vfx?.playEmberExplosion(opts); },
+      createTyphoon: (opts) => { engine.vfx?.createTyphoon(opts); },
 
       print: (text, opts) => {
         this.hud.print(text, opts);

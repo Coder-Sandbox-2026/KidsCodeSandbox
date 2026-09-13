@@ -146,6 +146,22 @@ declare function playExplosion(options?: ExplosionOptions | GameObject | Player 
 /** Same as playExplosion — the VFX module's calling method. */
 declare function playEmberExplosion(options?: ExplosionOptions | GameObject | Player | [number, number, number]): void;
 
+interface TyphoonOptions {
+  /** World position, like [0, 0, -8]. Skip this to play on the ground in front of you. */
+  position?: [number, number, number] | number[] | Vec3;
+  /** How many seconds the tornado stays up. Default 8. */
+  duration?: number;
+  /** Shockwave base radius. Default 1. Max 10. */
+  radius?: number;
+}
+
+/**
+ * Play the typhoon water-tornado effect.
+ * With no arguments, it plays on the ground in front of the camera.
+ * Pass a player or object to play it at that actor.
+ */
+declare function createTyphoon(options?: TyphoonOptions | GameObject | Player | [number, number, number]): void;
+
 declare function print(text: string, options?: PrintOptions): void;
 declare function setText(id: string, text: string, options?: PrintOptions): void;
 declare function clearText(): void;

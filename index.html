@@ -4,6 +4,16 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>🎮 Kids Code 3D</title>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "./node_modules/three/build/three.module.js",
+      "three/addons/": "./node_modules/three/examples/jsm/",
+      "@dimforge/rapier3d-compat": "./node_modules/@dimforge/rapier3d-compat/dist/rapier.mjs",
+      "monaco-editor": "./node_modules/monaco-editor/esm/vs/index.js"
+    }
+  }
+  </script>
   <!-- Opening this source file via file:// cannot load npm packages. Send them to the bundled app. -->
   <script id="file-protocol-redirect">
     (function () {
@@ -37,6 +47,7 @@
           <button data-example="coin">⭐ Collect a Coin</button>
           <button data-example="cake">🎂 Collect a Cake</button>
           <button data-example="explosion">💥 Ember Explosion</button>
+          <button data-example="typhoon">🌪 Typhoon</button>
         </div>
       </div>
       <button id="btn-vfx" class="tb-btn" title="Play the ember explosion in the 3D world">💥 VFX</button>

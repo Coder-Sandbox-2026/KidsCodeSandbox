@@ -1,6 +1,6 @@
 /**
  * VFXManager.js – Owns live visual effects, ticks them in the engine loop,
- * and wraps the bundled ember explosion so kid code can call playExplosion().
+ * and wraps bundled VFX so kid code can call playExplosion() / createTyphoon().
  */
 import * as THREE from 'three';
 import {
@@ -8,6 +8,11 @@ import {
   loadVfxTextures,
   playEmberExplosion,
 } from '../vfx/ember-explosion-vfx/index.js';
+import {
+  createTyphoon as spawnTyphoonEffect,
+  disposeTyphoonTextures,
+  loadTyphoonTextures,
+} from '../vfx/typhoon-vfx/index.js';
 
 const _forward = new THREE.Vector3();
 
@@ -21,6 +26,9 @@ const PLAYGROUND_DEFAULTS = {
 
 const DEFAULT_RADIUS = 3;
 const MAX_RADIUS = 10;
+const DEFAULT_TYPHOON_RADIUS = 1;
+const DEFAULT_TYPHOON_DURATION = 8;
+const MAX_TYPHOON_DURATION = 30;
 const MAX_ACTIVE = 3;
 
 export class VFXManager {
@@ -31,6 +39,32 @@ export class VFXManager {
       console.warn('[vfx] Could not load explosion textures:', err);
       return null;
     });
+    this._typhoonTexturesPromise = null;
+  }
+
+  /**
+   * Keep typhoon GPU textures resident for the current level.
+   * Call again after a level change to reload them.
+   */
+  retainTyphoonTextures() {
+    if (!this._typhoonTexturesPromise) {
+      this._typhoonTexturesPromise = loadTyphoonTextures().catch((err) => {
+        console.warn('[vfx] Could not load typhoon textures:', err);
+        this._typhoonTexturesPromise = null;
+        return null;
+      });
+    }
+    return this._typhoonTexturesPromise;
+  }
+
+  /**
+   * Free typhoon textures. Only call when the level is being replaced or cleared.
+   * Live typhoon effects are stopped first so they do not keep disposed maps.
+   */
+  releaseTyphoonTextures() {
+    this.clear();
+    disposeTyphoonTextures();
+    this._typhoonTexturesPromise = null;
   }
 
   /**
@@ -73,6 +107,46 @@ export class VFXManager {
     });
     effect.on('phase', ({ phase }) => {
       this._handleExplosionPhase(phase);
+    });
+    return effect;
+  }
+
+  /**
+   * Play the typhoon. Position can be omitted (on the ground in front of the camera),
+   * a [x, y, z] array, a Vector3, a { x, y, z } object, or a game object / player.
+   * Options objects only use position, duration, and radius.
+   */
+  async createTyphoon(options) {
+    const scene = this.engine.scene;
+    if (!scene) return null;
+
+    const config = normalizePlayOptions(options);
+    const position = toVector3(config.position) || inFrontOfCameraOnGround(this.engine.camera);
+    const radius = resolveTyphoonRadius(config.radius);
+    const duration = resolveDuration(config.duration);
+    const textures = await this.retainTyphoonTextures();
+
+    let effect;
+    try {
+      effect = await spawnTyphoonEffect(scene, {
+        position,
+        radius,
+        duration,
+        ...(textures ? { textures } : {}),
+      });
+    } catch (err) {
+      console.warn('[vfx] Could not play typhoon:', err);
+      return null;
+    }
+
+    while (this._effects.size >= MAX_ACTIVE) {
+      const oldest = this._effects.values().next().value;
+      this._disposeEffect(oldest);
+    }
+
+    this._effects.add(effect);
+    effect.on('finished', () => {
+      if (!effect.config?.loop) this._disposeEffect(effect);
     });
     return effect;
   }
@@ -121,6 +195,7 @@ function normalizePlayOptions(options) {
   return {
     position: options.position,
     radius: options.radius,
+    duration: options.duration,
   };
 }
 
@@ -129,6 +204,20 @@ function resolveRadius(radius) {
   const value = Number(radius);
   if (!Number.isFinite(value)) return DEFAULT_RADIUS;
   return Math.min(MAX_RADIUS, Math.max(0, value));
+}
+
+function resolveTyphoonRadius(radius) {
+  if (radius == null || radius === '') return DEFAULT_TYPHOON_RADIUS;
+  const value = Number(radius);
+  if (!Number.isFinite(value)) return DEFAULT_TYPHOON_RADIUS;
+  return Math.min(MAX_RADIUS, Math.max(0.05, value));
+}
+
+function resolveDuration(duration) {
+  if (duration == null || duration === '') return DEFAULT_TYPHOON_DURATION;
+  const value = Number(duration);
+  if (!Number.isFinite(value)) return DEFAULT_TYPHOON_DURATION;
+  return Math.min(MAX_TYPHOON_DURATION, Math.max(0.05, value));
 }
 
 function isGameActor(value) {
@@ -146,7 +235,8 @@ function isVec3Like(value) {
     && typeof value.y === 'number'
     && typeof value.z === 'number'
     && value.position == null
-    && value.radius == null;
+    && value.radius == null
+    && value.duration == null;
 }
 
 function toVector3(value) {
@@ -166,5 +256,13 @@ function inFrontOfCamera(camera, distance = 10) {
   camera.getWorldDirection(_forward);
   const pos = camera.position.clone().addScaledVector(_forward, distance);
   pos.y = Math.max(pos.y, 1.25);
+  return pos;
+}
+
+function inFrontOfCameraOnGround(camera, distance = 10) {
+  if (!camera) return new THREE.Vector3(0, 0, -6);
+  camera.getWorldDirection(_forward);
+  const pos = camera.position.clone().addScaledVector(_forward, distance);
+  pos.y = 0;
   return pos;
 }

@@ -17,6 +17,7 @@ import towerExample from './examples/tower.js';
 import coinExample from './examples/coin.js';
 import cakeExample from './examples/cake.js';
 import explosionExample from './examples/explosion.js';
+import typhoonExample from './examples/typhoon.js';
 
 const EXAMPLES = {
   cube: cubeExample,
@@ -26,6 +27,7 @@ const EXAMPLES = {
   coin: coinExample,
   cake: cakeExample,
   explosion: explosionExample,
+  typhoon: typhoonExample,
 };
 
 // ===== Bootstrap =====

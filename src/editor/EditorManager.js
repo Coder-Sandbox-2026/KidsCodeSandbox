@@ -18,6 +18,18 @@ const API_LIB_PATH = 'file:///kids-code-api.d.ts';
 if (typescript?.javascriptDefaults) {
   const js = typescript.javascriptDefaults;
   const ts = typescript.typescriptDefaults;
+  // Kid API completions come from AutocompleteProvider. The TS worker also
+  // suggests the same names from GAME_API_DTS (console.log, createCube, …).
+  // Those duplicates often have no usable insert, so accepting them does nothing.
+  const modeConfiguration = {
+    ...js.modeConfiguration,
+    completionItems: false,
+  };
+  js.setModeConfiguration(modeConfiguration);
+  ts.setModeConfiguration({
+    ...ts.modeConfiguration,
+    completionItems: false,
+  });
   const compilerOptions = {
     allowNonTsExtensions: true,
     allowJs: true,

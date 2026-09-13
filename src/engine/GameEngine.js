@@ -72,7 +72,7 @@ export class GameEngine {
     // Default level
     this.level = new DefaultLevel(this.sceneManager.scene, this.physics);
 
-    // Visual effects (ember explosion, …)
+    // Visual effects (ember explosion, typhoon, …)
     this.vfx = new VFXManager(this);
 
     // Crosshair
@@ -226,6 +226,7 @@ export class GameEngine {
     if (this.levelLoaded) return;
     this.level.build();
     this.levelLoaded = true;
+    this.vfx?.retainTyphoonTextures();
   }
 
   /** Clear everything user-created but keep the level */
@@ -255,6 +256,7 @@ export class GameEngine {
   /** Full reset – clears user objects, rebuilds level, resets player */
   reset() {
     this.clearUserObjects();
+    this.vfx?.releaseTyphoonTextures();
     this.level.clear();
     this.physics.reset();
     this.player.dispose();
@@ -268,6 +270,7 @@ export class GameEngine {
   /** Clear the entire scene (including level) */
   clearScene() {
     this.clearUserObjects();
+    this.vfx?.releaseTyphoonTextures();
     this.level.clear();
     this.physics.reset();
     this.player.dispose();

@@ -1,4 +1,4 @@
-import * as e from "three";
+import * as e from "./three.js";
 //#region src/vfx/utils/events.js
 var t = class {
 	constructor() {
