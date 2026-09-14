@@ -1,6 +1,6 @@
 /**
  * VFXManager.js – Owns live visual effects, ticks them in the engine loop,
- * and wraps bundled VFX so kid code can call playExplosion() / createTyphoon().
+ * and wraps bundled VFX so kid code can call playExplosion() / playTyphoon().
  */
 import * as THREE from 'three';
 import {

@@ -279,7 +279,7 @@ test('Stop keeps ownership, waits and keyboard behavior unchanged', async t => {
   assert.equal(h.engine.userMeshes.length, 1);
 });
 
-for (const method of ['playEmberExplosion', 'playTyphoon']) {
+for (const method of ['playEmberExplosion', 'createTyphoon']) {
   for (const phase of ['textures', 'construction']) {
     for (const action of ['Run', 'Reset', 'Clear']) {
       test(`${method}: ${action} invalidates pending ${phase} (E)`, async t => {
@@ -301,7 +301,7 @@ for (const method of ['playEmberExplosion', 'playTyphoon']) {
         const modules = {
           loadVfxTextures: () => phase === 'textures' ? gate.promise : Promise.resolve({}),
           loadTyphoonTextures: () => phase === 'textures' ? gate.promise : Promise.resolve({}),
-          playEmberExplosion: build, playTyphoon: build,
+          playEmberExplosion: build, createTyphoon: build,
         };
         h.engine.vfx = new VFXManager(h.engine, modules);
         const { run } = h.begin();
@@ -328,7 +328,7 @@ test('current VFX and toolbar VFX still attach to the scene', async t => {
   };
   h.engine.vfx = new VFXManager(h.engine, {
     loadVfxTextures: async () => ({}), loadTyphoonTextures: async () => ({}),
-    playEmberExplosion: build, playTyphoon: build,
+    playEmberExplosion: build, createTyphoon: build,
   });
   const { run, scope } = h.begin();
   assert.equal(scope.playTyphoon(), undefined, 'public VFX return contract stays void');
