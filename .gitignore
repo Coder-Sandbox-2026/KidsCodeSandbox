@@ -3,6 +3,9 @@ node_modules/
 dist/
 KidsCode3D.html
 
+
+
+
 # Local Windows / USB pack. Not used by GitHub Pages.
 offline/
 start.bat
@@ -16,3 +19,9 @@ Thumbs.db
 .vscode/
 .idea/
 *.local
+.github/copilot-instructions.md
+
+# Accidental root-level shell output / local command artifacts.
+/$_
+/FETCH_HEAD
+/git

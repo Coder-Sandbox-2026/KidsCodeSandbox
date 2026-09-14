@@ -7,8 +7,9 @@
  */
 import goldCoinUrl from './model/goldCoin.glb?url';
 import cakeUrl from './model/Cake.glb?url';
+import debugGoldStarUrl from './model/GoldStar.glb?url';
 
-export { goldCoinUrl, cakeUrl };
+export { goldCoinUrl, cakeUrl, debugGoldStarUrl };
 
 /** Copied from public/basis/ next to the page (dev, dist, GitHub Pages). */
 export function basisTranscoderPath() {

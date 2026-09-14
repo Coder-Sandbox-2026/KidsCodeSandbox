@@ -81,6 +81,38 @@ async function harness(t) {
   return { engine, api, hud, output, begin, invalidate };
 }
 
+test('print observer detects successful runtime calls only', async t => {
+  const h = await harness(t);
+  const { run } = h.begin();
+  let prints = 0;
+  const scope = h.api.buildScope(run, { onPrint: () => prints++ });
+  await run.execute('// print("comment");\nconst text = "print";', scope);
+  assert.equal(prints, 0);
+  await run.execute('const say = print; say("hello");', scope);
+  assert.equal(prints, 1);
+  h.api.hud.print = () => { throw new Error('print failed'); };
+  assert.throws(() => scope.print('failure'), /print failed/);
+  assert.equal(prints, 1);
+});
+
+test('old print observers cannot report after a new run or reset', async t => {
+  const h = await harness(t);
+  const { run } = h.begin();
+  let prints = 0;
+  const oldScope = h.api.buildScope(run, { onPrint: () => prints++ });
+  const gate = deferred();
+  const pending = run.execute('await gate; print("late");', { ...oldScope, gate: gate.promise });
+  const next = h.begin();
+  gate.resolve();
+  await pending;
+  assert.equal(prints, 0);
+  assert.throws(() => oldScope.print('stale'), RunCancelledError);
+  const nextScope = h.api.buildScope(next.run, { onPrint: () => prints++ });
+  h.engine.reset();
+  assert.throws(() => nextScope.print('reset'), RunCancelledError);
+  assert.equal(prints, 0);
+});
+
 for (const action of ['Run', 'Reset', 'Clear']) {
   test(`${action} cancels old wait before createCube (A/B/C)`, async t => {
     const h = await harness(t);
@@ -247,7 +279,7 @@ test('Stop keeps ownership, waits and keyboard behavior unchanged', async t => {
   assert.equal(h.engine.userMeshes.length, 1);
 });
 
-for (const method of ['playEmberExplosion', 'createTyphoon']) {
+for (const method of ['playEmberExplosion', 'playTyphoon']) {
   for (const phase of ['textures', 'construction']) {
     for (const action of ['Run', 'Reset', 'Clear']) {
       test(`${method}: ${action} invalidates pending ${phase} (E)`, async t => {
@@ -269,7 +301,7 @@ for (const method of ['playEmberExplosion', 'createTyphoon']) {
         const modules = {
           loadVfxTextures: () => phase === 'textures' ? gate.promise : Promise.resolve({}),
           loadTyphoonTextures: () => phase === 'textures' ? gate.promise : Promise.resolve({}),
-          playEmberExplosion: build, createTyphoon: build,
+          playEmberExplosion: build, playTyphoon: build,
         };
         h.engine.vfx = new VFXManager(h.engine, modules);
         const { run } = h.begin();
@@ -296,10 +328,10 @@ test('current VFX and toolbar VFX still attach to the scene', async t => {
   };
   h.engine.vfx = new VFXManager(h.engine, {
     loadVfxTextures: async () => ({}), loadTyphoonTextures: async () => ({}),
-    playEmberExplosion: build, createTyphoon: build,
+    playEmberExplosion: build, playTyphoon: build,
   });
   const { run, scope } = h.begin();
-  assert.equal(scope.createTyphoon(), undefined, 'public VFX return contract stays void');
+  assert.equal(scope.playTyphoon(), undefined, 'public VFX return contract stays void');
   const effect = await h.engine.vfx.playEmberExplosion({}, run);
   const toolbar = await h.engine.vfx.playEmberExplosion();
   assert.equal(effect.object3D.parent, h.engine.scene);

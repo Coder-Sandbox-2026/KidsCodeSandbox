@@ -8,27 +8,120 @@ import { GameAPI } from './api/GameAPI.js';
 import { formatFriendlyError } from './editor/ErrorHandler.js';
 import { appSettings } from './settings/appSettings.js';
 import { mountSettingsPanel } from './settings/SettingsPanel.js';
+import { mountChallengeUI } from './challenges/ChallengeUI.js';
 
-// Examples
-import cubeExample from './examples/cube.js';
-import physicsExample from './examples/physics.js';
-import animationExample from './examples/animation.js';
-import towerExample from './examples/tower.js';
-import coinExample from './examples/coin.js';
-import cakeExample from './examples/cake.js';
-import explosionExample from './examples/explosion.js';
-import typhoonExample from './examples/typhoon.js';
+// ===== Application State =====
+const AppState = {
+  mode: 'create', // 'create' | 'challenge'
+  gameType: 'first-person',
+  level: 1,
 
-const EXAMPLES = {
-  cube: cubeExample,
-  physics: physicsExample,
-  animation: animationExample,
-  tower: towerExample,
-  coin: coinExample,
-  cake: cakeExample,
-  explosion: explosionExample,
-  typhoon: typhoonExample,
+  setMode(mode) {
+    this.mode = mode;
+    const btn = document.getElementById('btn-mode');
+    if (btn) {
+      btn.textContent = `${mode.charAt(0).toUpperCase() + mode.slice(1)} ▾`;
+      btn.title = `${mode} — ${mode === 'create' ? 'build your own game' : 'complete a pre-built game'}`;
+    }
+    // Game type and Create level selectors are visible only in Create mode.
+    const gameTypeDropdown = document.getElementById('game-type-dropdown');
+    if (gameTypeDropdown) gameTypeDropdown.style.display = mode === 'create' ? '' : 'none';
+    const levelDropdown = document.getElementById('level-dropdown');
+    if (levelDropdown) levelDropdown.style.display = mode === 'create' ? '' : 'none';
+
+    // Challenge controls hidden by default via CSS; show during challenge mode
+    document.getElementById('challenge-controls').classList.toggle('hidden', mode !== 'challenge');
+  },
+
+  setGameType(type) {
+    this.gameType = type;
+    const btn = document.getElementById('btn-game-type');
+    if (type === 'first-person') btn.textContent = 'First Person ▾';
+    // Future: add other game types
+    document.querySelectorAll('#game-type-menu button').forEach(b => b.classList.toggle('active', b.dataset.gameType === type));
+  },
+
+  setLevel(level) {
+    this.level = level;
+    const btn = document.getElementById('btn-level');
+    btn.textContent = `Level ${level} ▾`;
+    document.querySelectorAll('#level-menu button').forEach(b => b.classList.toggle('active', parseInt(b.dataset.level) === level));
+  },
 };
+
+AppState.setMode('create');
+AppState.setGameType('first-person');
+AppState.setLevel(1);
+
+// ===== Shared Dropdown Helper =====
+const TOOLBAR_DROPDOWN_IDS = ['mode-menu', 'game-type-menu', 'level-menu'];
+
+let _openDropdownMenu = null; // tracks which menu is currently open (null = none)
+
+function closeAllToolbarDropdowns(exceptId = null) {
+  TOOLBAR_DROPDOWN_IDS.forEach(id => {
+    if (id !== exceptId) {
+      const m = document.getElementById(id);
+      if (m) m.classList.add('hidden');
+    }
+  });
+}
+
+// ===== Mode Navigation =====
+const modeMenu = document.getElementById('mode-menu');
+document.getElementById('btn-mode').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const isOpening = !modeMenu.classList.contains('hidden');
+  closeAllToolbarDropdowns(isOpening ? null : 'mode-menu');
+  if (!isOpening) _openDropdownMenu = modeMenu;
+  else _openDropdownMenu = null;
+  modeMenu.classList.toggle('hidden');
+});
+
+// Mode option selection — click on a button inside the mode menu
+modeMenu.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-mode]');
+  if (!btn) return;
+  AppState.setMode(btn.dataset.mode);
+  modeMenu.classList.add('hidden');
+});
+
+// Game type dropdown
+const gameTypeBtn = document.getElementById('btn-game-type');
+const gameTypeMenu = document.getElementById('game-type-menu');
+gameTypeBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const isOpening = !gameTypeMenu.classList.contains('hidden');
+  closeAllToolbarDropdowns(isOpening ? null : 'game-type-menu');
+  if (!isOpening) _openDropdownMenu = gameTypeMenu;
+  else _openDropdownMenu = null;
+  gameTypeMenu.classList.toggle('hidden');
+});
+
+// Level dropdown
+const levelBtn = document.getElementById('btn-level');
+const levelMenu = document.getElementById('level-menu');
+levelBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const isOpening = !levelMenu.classList.contains('hidden');
+  closeAllToolbarDropdowns(isOpening ? null : 'level-menu');
+  if (!isOpening) _openDropdownMenu = levelMenu;
+  else _openDropdownMenu = null;
+  levelMenu.classList.toggle('hidden');
+});
+
+// Outside-click: close all open dropdown menus (but not the one being opened by its button)
+document.addEventListener('click', (e) => {
+  if (_openDropdownMenu && !_openDropdownMenu.contains(e.target)) {
+    _openDropdownMenu.classList.add('hidden');
+    _openDropdownMenu = null;
+  }
+});
+
+// Challenge mode controls (stub — no functionality yet)
+const challengeRunBtn = document.getElementById('btn-challenge-run');
+const challengeStopBtn = document.getElementById('btn-challenge-stop');
+const challengeResetBtn = document.getElementById('btn-challenge-reset');
 
 // ===== Bootstrap =====
 (async function main() {
@@ -94,9 +187,12 @@ const EXAMPLES = {
   });
 
   // ---- Code execution ----
+  let currentChallengeRun = null;
   async function runCode() {
     // Clean up previous run
     const run = engine.beginStudentRun();
+    currentChallengeRun = AppState.mode === 'challenge' ? run : null;
+    challengeUI.setComplete(false);
     api.reset();
     consoleOutput.innerHTML = '';
     editor._clearDecorations();
@@ -106,7 +202,16 @@ const EXAMPLES = {
     engine.resume();
 
     const code = editor.getCode();
-    const scope = api.buildScope(run);
+    let challengePrinted = false;
+    const validChallenge = () => run.active && currentChallengeRun === run && AppState.mode === 'challenge';
+    const scope = api.buildScope(run, currentChallengeRun === run ? {
+      onPrint: () => {
+        if (validChallenge()) {
+          challengePrinted = true;
+          challengeUI.setComplete(true);
+        }
+      },
+    } : undefined);
 
     await run.execute(code, scope, {
       success: () => {
@@ -118,26 +223,39 @@ const EXAMPLES = {
         editor.highlightError(line);
       },
     });
+    if (validChallenge() && !challengePrinted) challengeUI.setComplete(false, true);
   }
 
   // ---- Toolbar buttons ----
-  document.getElementById('btn-run').addEventListener('click', runCode);
+  const challengeUI = mountChallengeUI({
+    viewport: document.getElementById('viewport-pane'),
+    editor,
+    runCode,
+  });
+  document.getElementById('btn-run').addEventListener('click', () => {
+    if (AppState.mode === 'challenge') challengeUI.show();
+    else runCode();
+  });
+  modeMenu.addEventListener('click', (event) => {
+    if (event.target.closest('[data-mode]')) {
+      currentChallengeRun = null;
+      challengeUI.setComplete(false);
+      challengeUI.close();
+    }
+  });
 
   document.getElementById('btn-stop').addEventListener('click', () => {
+    currentChallengeRun = null;
     stopGame();
   });
 
   document.getElementById('btn-reset').addEventListener('click', () => {
+    currentChallengeRun = null;
+    challengeUI.setComplete(false);
     engine.reset();
     api.reset();
     consoleOutput.innerHTML = '';
     logToConsole('↻ Reset!', 'info');
-  });
-
-  document.getElementById('btn-clear').addEventListener('click', () => {
-    engine.clearScene();
-    api.reset();
-    logToConsole('🗑 Scene cleared.', 'info');
   });
 
   document.getElementById('btn-level').addEventListener('click', () => {
@@ -150,38 +268,6 @@ const EXAMPLES = {
   document.getElementById('btn-save').addEventListener('click', () => {
     editor.save();
     logToConsole('💾 Code saved!', 'info');
-  });
-
-  document.getElementById('btn-vfx').addEventListener('click', () => {
-    engine.resume();
-    playOverlay.classList.add('hidden');
-    engine.vfx.playEmberExplosion();
-    logToConsole('💥 Playing ember explosion in front of the camera. Watch the viewport!', 'info');
-  });
-
-  // ---- Example dropdown ----
-  const exampleBtn = document.getElementById('btn-example');
-  const exampleMenu = document.getElementById('example-menu');
-
-  exampleBtn.addEventListener('click', () => {
-    exampleMenu.classList.toggle('hidden');
-  });
-
-  document.addEventListener('click', (e) => {
-    if (!exampleBtn.contains(e.target) && !exampleMenu.contains(e.target)) {
-      exampleMenu.classList.add('hidden');
-    }
-  });
-
-  exampleMenu.querySelectorAll('button').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const key = btn.dataset.example;
-      if (EXAMPLES[key]) {
-        editor.setCode(EXAMPLES[key]);
-        logToConsole(`📄 Loaded "${btn.textContent.trim()}" example.`, 'info');
-      }
-      exampleMenu.classList.add('hidden');
-    });
   });
 
   // ---- Console toggle ----
@@ -202,6 +288,11 @@ const EXAMPLES = {
       document.exitFullscreen?.();
     }
   });
+
+  // ---- Challenge mode controls (stub — no functionality yet) ----
+  challengeRunBtn?.addEventListener('click', () => logToConsole('Challenge run not implemented yet.', 'warn'));
+  challengeStopBtn?.addEventListener('click', stopGame);
+  challengeResetBtn?.addEventListener('click', () => logToConsole('Challenge reset not implemented yet.', 'warn'));
 
   // ---- Resize handle ----
   const resizeHandle = document.getElementById('resize-handle');

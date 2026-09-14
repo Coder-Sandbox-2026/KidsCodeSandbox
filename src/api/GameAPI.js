@@ -211,7 +211,7 @@ export class GameAPI {
   }
 
   /** Build the flat API dictionary injected as globals into user code */
-  buildScope(run) {
+  buildScope(run, { onPrint } = {}) {
     run.assertActive();
     const self = this;
     const engine = this.engine;
@@ -233,14 +233,18 @@ export class GameAPI {
       createPlane: wrapCreate(this.shapes.createPlane),
       createGoldCoin: wrapCreate(this.models.createGoldCoin),
       createCake: wrapCreate(this.models.createCake),
+      ...(this.models.createDebugGoldStar ? {
+        createDebugGoldStar: wrapCreate(this.models.createDebugGoldStar),
+      } : {}),
 
       playExplosion: (opts) => { engine.vfx?.playEmberExplosion(opts, run); },
       playEmberExplosion: (opts) => { engine.vfx?.playEmberExplosion(opts, run); },
-      createTyphoon: (opts) => { engine.vfx?.createTyphoon(opts, run); },
+      playTyphoon: (options) => { engine.vfx?.createTyphoon(options, run); },
 
       print: (text, opts) => {
         this.hud.print(text, opts);
         this._consoleFn(String(text), 'info');
+        if (run.active) onPrint?.();
       },
       setText: (id, text, opts) => this.hud.setText(id, text, opts),
       clearText: () => this.hud.clear(),

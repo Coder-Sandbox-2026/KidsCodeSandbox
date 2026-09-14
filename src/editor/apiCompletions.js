@@ -15,6 +15,7 @@
  * can show a collapsed summary plus "See all options".
  */
 import { optionField } from './hoverDocs.js';
+import { DEBUG_GOLD_STAR_ENABLED } from '../debug/debugGoldStarConfig.js';
 
 export function call(name, guided, high = guided, extras = {}) {
   return { kind: 'token', off: name, basic: `${name}()`, guided, high, ...extras };
@@ -58,7 +59,7 @@ export const EXPLOSION_OPTIONS = [
   optionField('radius', 'a number', 'How wide the blast is. Default is 3. The biggest you can use is 10.', { example: '3' }),
 ];
 
-/** Options for createTyphoon() */
+/** Options for playTyphoon() */
 export const TYPHOON_OPTIONS = [
   optionField('position', '[x, y, z]', 'Where the typhoon happens. Skip this to play it on the ground in front of you.', { example: '[0, 0, -8]' }),
   optionField('duration', 'a number', 'How many seconds the tornado stays up. Default is 8.', { example: '8' }),
@@ -94,6 +95,15 @@ export const PLAYER_SETTING_OPTIONS = [
 
 /** Global API completions */
 export const API_DOCS = [
+  // Temporary API: use the same gate as the runtime factory and Monaco declarations.
+  ...(DEBUG_GOLD_STAR_ENABLED ? [{
+    label: 'createDebugGoldStar',
+    kind: 'Function',
+    detail: 'Development only: place a glowing gold star',
+    doc: 'createDebugGoldStar(options?)\n\nPlaces a debug gold star with pulsing glow and glitter.\nReturns a GameObject with the usual position, rotation, scale and object methods.\nTouch detection is on by default; physics is off.\nThis is a development tool, not a challenge reward.\n\nExample:\nconst star = createDebugGoldStar({ position: [0, 2, 0], scale: 0.5 });',
+    options: SHAPE_OPTIONS,
+    completion: call('createDebugGoldStar', 'createDebugGoldStar({\n\tposition: [0, 2, 0],\n\tscale: 0.5\n})'),
+  }] : []),
   {
     label: 'createCube',
     kind: 'Function',
@@ -203,15 +213,15 @@ export const API_DOCS = [
     ),
   },
   {
-    label: 'createTyphoon',
+    label: 'playTyphoon',
     kind: 'Function',
     detail: 'Play the typhoon water-tornado effect',
-    doc: 'createTyphoon(options)\n\nPlays a water typhoon in the 3D world.\nWith no arguments, it plays on the ground in front of you.\nYou can also pass a player or object to play it there.\n\nOptions: position, duration, radius\n\nExample:\ncreateTyphoon();\ncreateTyphoon({ position: [0, 0, -8], duration: 8, radius: 1 });\nonKeyPressed("KeyT", () => createTyphoon());',
+    doc: 'playTyphoon(options)\n\nPlays a water typhoon in the 3D world.\nWith no arguments, it plays on the ground in front of you.\nYou can also pass a player or object to play it there.\n\nOptions: position, duration, radius\n\nExample:\nplayTyphoon();\nplayTyphoon({ position: [0, 0, -8], duration: 8, radius: 1 });\nonKeyPressed("KeyT", () => playTyphoon());',
     options: TYPHOON_OPTIONS,
     completion: call(
-      'createTyphoon',
-      'createTyphoon()',
-      'createTyphoon({\n\tposition: [0, 0, -8],\n\tduration: ${1:8},\n\tradius: ${2:1}\n})'
+      'playTyphoon',
+      'playTyphoon()',
+      'playTyphoon({\n\tposition: [0, 0, -8],\n\tduration: ${1:8},\n\tradius: ${2:1}\n})'
     ),
   },
   {

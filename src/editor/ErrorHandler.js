@@ -3,7 +3,15 @@
  * child-friendly error messages with line numbers and suggestions.
  */
 
+import { DEBUG_GOLD_STAR_ENABLED } from '../debug/debugGoldStarConfig.js';
+
+const DEBUG_STAR_TYPOS = DEBUG_GOLD_STAR_ENABLED ? {
+  createDebugGoldstar: 'createDebugGoldStar',
+  creatDebugGoldStar: 'createDebugGoldStar',
+} : {};
+
 const TYPO_SUGGESTIONS = {
+  ...DEBUG_STAR_TYPOS,
   'posishun': 'position',
   'positon': 'position',
   'postion': 'position',
@@ -19,10 +27,10 @@ const TYPO_SUGGESTIONS = {
   'createcake': 'createCake',
   'playExplosin': 'playExplosion',
   'playExploision': 'playExplosion',
-  'creatTyphoon': 'createTyphoon',
-  'createTyphoonn': 'createTyphoon',
-  'createTyphon': 'createTyphoon',
-  'createTypoon': 'createTyphoon',
+  'playTyphoon': 'playTyphoon',
+  'playTyphonn': 'playTyphoon',
+  'playTyphon': 'playTyphoon',
+  'playTypoon': 'playTyphoon',
 };
 
 export function formatFriendlyError(error, userCode) {
@@ -60,6 +68,8 @@ export function formatFriendlyError(error, userCode) {
     const varMatch = message.match(/(\w+) is not defined/);
     if (varMatch) {
       suggestion = `\nMake sure you created "${varMatch[1]}" first, or check your spelling.`;
+      const debugFix = Object.entries(DEBUG_STAR_TYPOS).find(([typo]) => typo.toLowerCase() === varMatch[1].toLowerCase());
+      if (debugFix) suggestion = `\nDid you mean "${debugFix[1]}"?`;
     }
   }
 

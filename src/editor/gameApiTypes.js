@@ -2,6 +2,8 @@
  * Type declarations injected into Monaco so createCube, print, etc. get
  * IntelliSense, hover docs, and parameter hints.
  */
+import { DEBUG_GOLD_STAR_ENABLED } from '../debug/debugGoldStarConfig.js';
+
 export const GAME_API_DTS = `
 /** Options for creating a 3D shape. */
 interface ShapeOptions {
@@ -128,6 +130,8 @@ declare function createCone(options?: ShapeOptions): GameObject;
 declare function createCylinder(options?: ShapeOptions): GameObject;
 declare function createPlane(options?: ShapeOptions): GameObject;
 declare function createGoldCoin(options?: ShapeOptions): GameObject;
+${DEBUG_GOLD_STAR_ENABLED ? `/** Development only: a gold star with pulsing glow and glitter. Collision defaults on; physics defaults off. */
+declare function createDebugGoldStar(options?: ShapeOptions): GameObject;` : ''}
 declare function createCake(options?: ShapeOptions): GameObject;
 
 interface ExplosionOptions {
@@ -160,7 +164,7 @@ interface TyphoonOptions {
  * With no arguments, it plays on the ground in front of the camera.
  * Pass a player or object to play it at that actor.
  */
-declare function createTyphoon(options?: TyphoonOptions | GameObject | Player | [number, number, number]): void;
+declare function playTyphoon(options?: TyphoonOptions | GameObject | Player | [number, number, number]): void;
 
 declare function print(text: string, options?: PrintOptions): void;
 declare function setText(id: string, text: string, options?: PrintOptions): void;

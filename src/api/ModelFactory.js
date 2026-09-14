@@ -4,6 +4,8 @@
  */
 import { GameObject } from './GameObject.js';
 import { CAKE_MODEL, GOLD_COIN_MODEL } from '../engine/ModelLoader.js';
+import { DEBUG_GOLD_STAR_ENABLED, DEBUG_GOLD_STAR_MODEL } from '../debug/debugGoldStarConfig.js';
+import { attachDebugGoldStar } from '../debug/debugGoldStar.js';
 
 function applyCommonOptions(root, opts = {}) {
   if (opts.position) {
@@ -73,5 +75,14 @@ export function createModelFactories(engine) {
     return spawnCollectible(engine, CAKE_MODEL, 'cake', opts);
   }
 
-  return { createGoldCoin, createCake };
+  return {
+    createGoldCoin, createCake,
+    ...(DEBUG_GOLD_STAR_ENABLED ? {
+      createDebugGoldStar(opts = {}) {
+        const obj = spawnCollectible(engine, DEBUG_GOLD_STAR_MODEL, DEBUG_GOLD_STAR_MODEL, opts);
+        attachDebugGoldStar(engine, obj);
+        return obj;
+      },
+    } : {}),
+  };
 }

@@ -28,33 +28,60 @@
 <body>
   <!-- Top toolbar -->
   <div id="toolbar">
-    <div class="toolbar-left">
-      <span class="app-title">🎮 Kids Code 3D</span>
+    <span class="app-title">🎮 Kids Code 3D</span>
+
+    <!-- Context group: mode, game type, level -->
+    <div id="toolbar-context" class="toolbar-group toolbar-context">
+      <span class="mode-label">MODE:</span>
+      <div id="mode-dropdown" class="dropdown mode-dropdown">
+        <button id="btn-mode" class="tb-btn" title="Select game mode">Create ▾</button>
+        <div id="mode-menu" class="dropdown-menu hidden">
+          <button data-mode="create" class="active">🖥 Create</button>
+          <button data-mode="challenge">📦 Challenge</button>
+        </div>
+      </div>
+
+      <!-- Game type selector -->
+      <div id="game-type-dropdown" class="dropdown game-type-dropdown">
+        <button id="btn-game-type" class="tb-btn" title="Select game type">First Person ▾</button>
+        <div id="game-type-menu" class="dropdown-menu hidden">
+          <button data-game-type="first-person" class="active">🖥 First Person</button>
+        </div>
+      </div>
+
+      <!-- Level selector -->
+      <div id="level-dropdown" class="dropdown level-dropdown">
+        <button id="btn-level" class="tb-btn" title="Select a level">Level 1 ▾</button>
+        <div id="level-menu" class="dropdown-menu hidden">
+          <button data-level="1" class="active">📦 Level 1</button>
+        </div>
+      </div>
+
+      <!-- Challenge mode controls (hidden by default) -->
+      <div id="challenge-controls" class="toolbar-group challenge-controls hidden">
+        <div class="dropdown challenge-level-dropdown">
+          <button id="btn-challenge-level" class="tb-btn" title="Select a challenge level">Challenge Level 1 ▾</button>
+          <div id="challenge-level-menu" class="dropdown-menu hidden">
+            <button data-challenge-level="1" class="active">📦 Challenge Level 1</button>
+          </div>
+        </div>
+      </div>
     </div>
-    <div class="toolbar-center">
+
+    <!-- Execution group: run, stop, reset -->
+    <div id="toolbar-execution" class="toolbar-group toolbar-execution">
       <button id="btn-run" class="tb-btn run" title="Run your code">▶ Run</button>
       <button id="btn-stop" class="tb-btn stop" title="Stop running code">■ Stop</button>
       <button id="btn-reset" class="tb-btn reset" title="Reset everything">↻ Reset</button>
-      <button id="btn-clear" class="tb-btn" title="Clear all objects">🗑 Clear</button>
-      <button id="btn-level" class="tb-btn" title="Load the default playground">📦 Level</button>
-      <div class="dropdown">
-        <button id="btn-example" class="tb-btn" title="Load an example">📄 Example ▾</button>
-        <div id="example-menu" class="dropdown-menu hidden">
-          <button data-example="cube">🟥 Create a Cube</button>
-          <button data-example="physics">🧱 Falling Objects</button>
-          <button data-example="animation">🔄 Spinning Object</button>
-          <button data-example="tower">🏗 Build a Tower</button>
-          <button data-example="coin">⭐ Collect a Coin</button>
-          <button data-example="cake">🎂 Collect a Cake</button>
-          <button data-example="explosion">💥 Ember Explosion</button>
-          <button data-example="typhoon">🌪 Typhoon</button>
-        </div>
-      </div>
-      <button id="btn-vfx" class="tb-btn" title="Play the ember explosion in the 3D world">💥 VFX</button>
-      <button id="btn-save" class="tb-btn" title="Save code to browser">💾 Save</button>
-      <button id="btn-settings" class="tb-btn" title="Open settings" aria-haspopup="dialog" aria-controls="settings-dialog" aria-expanded="false">⚙ Settings</button>
     </div>
+
+    <!-- Right utilities: save, settings, console, fullscreen -->
     <div class="toolbar-right">
+      <div id="toolbar-actions" class="toolbar-group toolbar-actions">
+        <button id="btn-save" class="tb-btn" title="Save code to browser">💾 Save</button>
+        <button id="btn-settings" class="tb-btn" title="Open settings" aria-haspopup="dialog" aria-controls="settings-dialog" aria-expanded="false">⚙ Settings</button>
+      </div>
+
       <button id="btn-console" class="tb-btn small" title="Toggle console">🖥</button>
       <button id="btn-fs" class="tb-btn small" title="Fullscreen viewport">⛶</button>
     </div>
