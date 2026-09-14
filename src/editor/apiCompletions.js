@@ -58,7 +58,7 @@ export const EXPLOSION_OPTIONS = [
   optionField('radius', 'a number', 'How wide the blast is. Default is 3. The biggest you can use is 10.', { example: '3' }),
 ];
 
-/** Options for createTyphoon() */
+/** Options for playTyphoon() */
 export const TYPHOON_OPTIONS = [
   optionField('position', '[x, y, z]', 'Where the typhoon happens. Skip this to play it on the ground in front of you.', { example: '[0, 0, -8]' }),
   optionField('duration', 'a number', 'How many seconds the tornado stays up. Default is 8.', { example: '8' }),
@@ -203,15 +203,15 @@ export const API_DOCS = [
     ),
   },
   {
-    label: 'createTyphoon',
+    label: 'playTyphoon',
     kind: 'Function',
     detail: 'Play the typhoon water-tornado effect',
-    doc: 'createTyphoon(options)\n\nPlays a water typhoon in the 3D world.\nWith no arguments, it plays on the ground in front of you.\nYou can also pass a player or object to play it there.\n\nOptions: position, duration, radius\n\nExample:\ncreateTyphoon();\ncreateTyphoon({ position: [0, 0, -8], duration: 8, radius: 1 });\nonKeyPressed("KeyT", () => createTyphoon());',
+    doc: 'playTyphoon(options)\n\nPlays a water typhoon in the 3D world.\nWith no arguments, it plays on the ground in front of you.\nYou can also pass a player or object to play it there.\n\nOptions: position, duration, radius\n\nExample:\nplayTyphoon();\nplayTyphoon({ position: [0, 0, -8], duration: 8, radius: 1 });\nonKeyPressed("KeyT", () => playTyphoon());',
     options: TYPHOON_OPTIONS,
     completion: call(
-      'createTyphoon',
-      'createTyphoon()',
-      'createTyphoon({\n\tposition: [0, 0, -8],\n\tduration: ${1:8},\n\tradius: ${2:1}\n})'
+      'playTyphoon',
+      'playTyphoon()',
+      'playTyphoon({\n\tposition: [0, 0, -8],\n\tduration: ${1:8},\n\tradius: ${2:1}\n})'
     ),
   },
   {

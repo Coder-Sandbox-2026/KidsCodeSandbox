@@ -160,7 +160,7 @@ interface TyphoonOptions {
  * With no arguments, it plays on the ground in front of the camera.
  * Pass a player or object to play it at that actor.
  */
-declare function createTyphoon(options?: TyphoonOptions | GameObject | Player | [number, number, number]): void;
+declare function playTyphoon(options?: TyphoonOptions | GameObject | Player | [number, number, number]): void;
 
 declare function print(text: string, options?: PrintOptions): void;
 declare function setText(id: string, text: string, options?: PrintOptions): void;

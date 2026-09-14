@@ -9,26 +9,116 @@ import { formatFriendlyError } from './editor/ErrorHandler.js';
 import { appSettings } from './settings/appSettings.js';
 import { mountSettingsPanel } from './settings/SettingsPanel.js';
 
-// Examples
-import cubeExample from './examples/cube.js';
-import physicsExample from './examples/physics.js';
-import animationExample from './examples/animation.js';
-import towerExample from './examples/tower.js';
-import coinExample from './examples/coin.js';
-import cakeExample from './examples/cake.js';
-import explosionExample from './examples/explosion.js';
-import typhoonExample from './examples/typhoon.js';
+// ===== Application State =====
+const AppState = {
+  mode: 'create', // 'create' | 'challenge'
+  gameType: 'first-person',
+  level: 1,
 
-const EXAMPLES = {
-  cube: cubeExample,
-  physics: physicsExample,
-  animation: animationExample,
-  tower: towerExample,
-  coin: coinExample,
-  cake: cakeExample,
-  explosion: explosionExample,
-  typhoon: typhoonExample,
+  setMode(mode) {
+    this.mode = mode;
+    const btn = document.getElementById('btn-mode');
+    if (btn) {
+      btn.textContent = `${mode.charAt(0).toUpperCase() + mode.slice(1)} ▾`;
+      btn.title = `${mode} — ${mode === 'create' ? 'build your own game' : 'complete a pre-built game'}`;
+    }
+    // Game type + level are always visible in #toolbar-context (Create mode only)
+    const gameTypeDropdown = document.getElementById('game-type-dropdown');
+    if (gameTypeDropdown) gameTypeDropdown.style.display = mode === 'create' ? '' : 'none';
+
+    // Challenge controls hidden by default via CSS; show during challenge mode
+    document.getElementById('challenge-controls').classList.toggle('hidden', mode !== 'challenge');
+  },
+
+  setGameType(type) {
+    this.gameType = type;
+    const btn = document.getElementById('btn-game-type');
+    if (type === 'first-person') btn.textContent = 'First Person ▾';
+    // Future: add other game types
+    document.querySelectorAll('#game-type-menu button').forEach(b => b.classList.toggle('active', b.dataset.gameType === type));
+  },
+
+  setLevel(level) {
+    this.level = level;
+    const btn = document.getElementById('btn-level');
+    btn.textContent = `Level ${level} ▾`;
+    document.querySelectorAll('#level-menu button').forEach(b => b.classList.toggle('active', parseInt(b.dataset.level) === level));
+  },
 };
+
+AppState.setMode('create');
+AppState.setGameType('first-person');
+AppState.setLevel(1);
+
+// ===== Shared Dropdown Helper =====
+const TOOLBAR_DROPDOWN_IDS = ['mode-menu', 'game-type-menu', 'level-menu'];
+
+let _openDropdownMenu = null; // tracks which menu is currently open (null = none)
+
+function closeAllToolbarDropdowns(exceptId = null) {
+  TOOLBAR_DROPDOWN_IDS.forEach(id => {
+    if (id !== exceptId) {
+      const m = document.getElementById(id);
+      if (m) m.classList.add('hidden');
+    }
+  });
+}
+
+// ===== Mode Navigation =====
+const modeMenu = document.getElementById('mode-menu');
+document.getElementById('btn-mode').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const isOpening = !modeMenu.classList.contains('hidden');
+  closeAllToolbarDropdowns(isOpening ? null : 'mode-menu');
+  if (!isOpening) _openDropdownMenu = modeMenu;
+  else _openDropdownMenu = null;
+  modeMenu.classList.toggle('hidden');
+});
+
+// Mode option selection — click on a button inside the mode menu
+modeMenu.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-mode]');
+  if (!btn) return;
+  AppState.setMode(btn.dataset.mode);
+  modeMenu.classList.add('hidden');
+});
+
+// Game type dropdown
+const gameTypeBtn = document.getElementById('btn-game-type');
+const gameTypeMenu = document.getElementById('game-type-menu');
+gameTypeBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const isOpening = !gameTypeMenu.classList.contains('hidden');
+  closeAllToolbarDropdowns(isOpening ? null : 'game-type-menu');
+  if (!isOpening) _openDropdownMenu = gameTypeMenu;
+  else _openDropdownMenu = null;
+  gameTypeMenu.classList.toggle('hidden');
+});
+
+// Level dropdown
+const levelBtn = document.getElementById('btn-level');
+const levelMenu = document.getElementById('level-menu');
+levelBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const isOpening = !levelMenu.classList.contains('hidden');
+  closeAllToolbarDropdowns(isOpening ? null : 'level-menu');
+  if (!isOpening) _openDropdownMenu = levelMenu;
+  else _openDropdownMenu = null;
+  levelMenu.classList.toggle('hidden');
+});
+
+// Outside-click: close all open dropdown menus (but not the one being opened by its button)
+document.addEventListener('click', (e) => {
+  if (_openDropdownMenu && !_openDropdownMenu.contains(e.target)) {
+    _openDropdownMenu.classList.add('hidden');
+    _openDropdownMenu = null;
+  }
+});
+
+// Challenge mode controls (stub — no functionality yet)
+const challengeRunBtn = document.getElementById('btn-challenge-run');
+const challengeStopBtn = document.getElementById('btn-challenge-stop');
+const challengeResetBtn = document.getElementById('btn-challenge-reset');
 
 // ===== Bootstrap =====
 (async function main() {
@@ -96,7 +186,7 @@ const EXAMPLES = {
   // ---- Code execution ----
   async function runCode() {
     // Clean up previous run
-    engine.clearUserObjects();
+    const run = engine.beginStudentRun();
     api.reset();
     consoleOutput.innerHTML = '';
     editor._clearDecorations();
@@ -106,25 +196,18 @@ const EXAMPLES = {
     engine.resume();
 
     const code = editor.getCode();
-    const scope = api.buildScope();
+    const scope = api.buildScope(run);
 
-    // Build function argument names and values
-    const argNames = Object.keys(scope);
-    const argValues = Object.values(scope);
-
-    try {
-      // Wrap in async function so kids can use `await`
-      const asyncWrapper = new Function(
-        ...argNames,
-        `"use strict"; return (async () => {\n${code}\n})();`
-      );
-      await asyncWrapper(...argValues);
-      logToConsole('✅ Code is running!', 'info');
-    } catch (err) {
-      const { friendly, line } = formatFriendlyError(err, code);
-      logToConsole(friendly, 'error');
-      editor.highlightError(line);
-    }
+    await run.execute(code, scope, {
+      success: () => {
+        logToConsole('✅ Code is running!', 'info');
+      },
+      error: (err) => {
+        const { friendly, line } = formatFriendlyError(err, code);
+        logToConsole(friendly, 'error');
+        editor.highlightError(line);
+      },
+    });
   }
 
   // ---- Toolbar buttons ----
@@ -141,12 +224,6 @@ const EXAMPLES = {
     logToConsole('↻ Reset!', 'info');
   });
 
-  document.getElementById('btn-clear').addEventListener('click', () => {
-    engine.clearScene();
-    api.reset();
-    logToConsole('🗑 Scene cleared.', 'info');
-  });
-
   document.getElementById('btn-level').addEventListener('click', () => {
     if (!engine.levelLoaded) {
       engine.loadLevel();
@@ -157,38 +234,6 @@ const EXAMPLES = {
   document.getElementById('btn-save').addEventListener('click', () => {
     editor.save();
     logToConsole('💾 Code saved!', 'info');
-  });
-
-  document.getElementById('btn-vfx').addEventListener('click', () => {
-    engine.resume();
-    playOverlay.classList.add('hidden');
-    engine.vfx.playEmberExplosion();
-    logToConsole('💥 Playing ember explosion in front of the camera. Watch the viewport!', 'info');
-  });
-
-  // ---- Example dropdown ----
-  const exampleBtn = document.getElementById('btn-example');
-  const exampleMenu = document.getElementById('example-menu');
-
-  exampleBtn.addEventListener('click', () => {
-    exampleMenu.classList.toggle('hidden');
-  });
-
-  document.addEventListener('click', (e) => {
-    if (!exampleBtn.contains(e.target) && !exampleMenu.contains(e.target)) {
-      exampleMenu.classList.add('hidden');
-    }
-  });
-
-  exampleMenu.querySelectorAll('button').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const key = btn.dataset.example;
-      if (EXAMPLES[key]) {
-        editor.setCode(EXAMPLES[key]);
-        logToConsole(`📄 Loaded "${btn.textContent.trim()}" example.`, 'info');
-      }
-      exampleMenu.classList.add('hidden');
-    });
   });
 
   // ---- Console toggle ----
@@ -209,6 +254,11 @@ const EXAMPLES = {
       document.exitFullscreen?.();
     }
   });
+
+  // ---- Challenge mode controls (stub — no functionality yet) ----
+  challengeRunBtn?.addEventListener('click', () => logToConsole('Challenge run not implemented yet.', 'warn'));
+  challengeStopBtn?.addEventListener('click', stopGame);
+  challengeResetBtn?.addEventListener('click', () => logToConsole('Challenge reset not implemented yet.', 'warn'));
 
   // ---- Resize handle ----
   const resizeHandle = document.getElementById('resize-handle');
