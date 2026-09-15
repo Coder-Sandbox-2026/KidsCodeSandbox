@@ -15,7 +15,7 @@ async function checkMetadata(enabled, base) {
     load(url, context, next) {
     const result = next(url, context);
     if (url.endsWith('/debugGoldStarConfig.js')) return {
-      ...result, source: String(result.source).replace('import.meta.env?.DEV === true', String(enabled)),
+      ...result, source: String(result.source).replace(/^export const DEBUG_GOLD_STAR_ENABLED = .*;$/m, `export const DEBUG_GOLD_STAR_ENABLED = ${enabled};`),
     };
     return result;
   }});
