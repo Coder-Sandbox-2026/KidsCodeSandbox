@@ -6,8 +6,8 @@
 import { DEBUG_GOLD_STAR_ENABLED } from '../debug/debugGoldStarConfig.js';
 
 const DEBUG_STAR_TYPOS = DEBUG_GOLD_STAR_ENABLED ? {
-  createDebugGoldstar: 'createDebugGoldStar',
-  creatDebugGoldStar: 'createDebugGoldStar',
+  createGoldstar: 'createGoldStar',
+  creatGoldStar: 'createGoldStar',
 } : {};
 
 const TYPO_SUGGESTIONS = {

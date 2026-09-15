@@ -1,6 +1,36 @@
 import * as THREE from 'three';
+import { GameObject } from './GameObject.js';
 
-// Temporary, visual-only effects. No lights, physics, student callbacks or timers.
+export class GoldStar extends GameObject {
+  constructor(...args) {
+    super(...args);
+    this._spinRate = 0.01;
+    attachGoldStar(this.engine, this);
+  }
+
+  getSpinRate() { return this._spinRate; }
+
+  setSpinRate(rate) {
+    if (!Number.isFinite(rate)) throw new TypeError('setSpinRate() expects a finite number');
+    this._spinRate = rate;
+    return this;
+  }
+
+  _triggerCollision(other) {
+    if (this._destroyed || this._collected) return;
+    if (!other?.isPlayer()) return super._triggerCollision(other);
+    this._collected = true;
+    try {
+      this.engine.onGoldStarCollected?.(this);
+      super._triggerCollision(other);
+    } finally {
+      this.destroy();
+    }
+  }
+}
+
+
+// Per-engine animation records, cleaned up when an item is destroyed or the run resets.
 const effects = new WeakMap();
 const INTERVAL = 0.12;
 const LIFETIME = 0.8;
@@ -20,7 +50,7 @@ function glitterTexture() {
   return texture;
 }
 
-export function attachDebugGoldStar(engine, obj) {
+function attachGoldStar(engine, obj) {
   let records = effects.get(engine);
   if (!records) effects.set(engine, records = new Set());
   const materials = [];
@@ -47,6 +77,7 @@ export function attachDebugGoldStar(engine, obj) {
   let elapsed = 0, spawnTime = 0;
   const record = {
     update(dt) {
+      obj.rotation.y += obj.getSpinRate();
       elapsed += dt;
       for (const { material, midpoint, amplitude } of materials) {
         material.emissiveIntensity = midpoint + amplitude * Math.sin(elapsed * 2.5);
@@ -103,10 +134,10 @@ export function attachDebugGoldStar(engine, obj) {
   };
 }
 
-export function updateDebugGoldStars(engine, dt) {
+export function updateGoldStars(engine, dt) {
   for (const record of effects.get(engine) ?? []) record.update(dt);
 }
 
-export function clearDebugGoldStars(engine) {
+export function clearGoldStars(engine) {
   for (const record of effects.get(engine) ?? []) record.dispose();
 }

@@ -9,6 +9,7 @@ import { formatFriendlyError } from './editor/ErrorHandler.js';
 import { appSettings } from './settings/appSettings.js';
 import { mountSettingsPanel } from './settings/SettingsPanel.js';
 import { mountChallengeUI } from './challenges/ChallengeUI.js';
+import { mountSuccessUI } from './challenges/SuccessUI.js';
 
 // ===== Application State =====
 const AppState = {
@@ -118,7 +119,7 @@ document.addEventListener('click', (e) => {
   }
 });
 
-// Challenge mode controls (stub — no functionality yet)
+// Challenge mode controls
 const challengeRunBtn = document.getElementById('btn-challenge-run');
 const challengeStopBtn = document.getElementById('btn-challenge-stop');
 const challengeResetBtn = document.getElementById('btn-challenge-reset');
@@ -159,7 +160,10 @@ const challengeResetBtn = document.getElementById('btn-challenge-reset');
     logToConsole('⚠️ A 3D model did not load: ' + engine.modelLoadError.message, 'error');
   }
 
-  function stopGame() {
+  let successUI = null;
+  function stopGame({ preserveSuccess = false } = {}) {
+    if (!preserveSuccess) successUI?.cancel();
+    currentChallengeRun = null;
     const wasRunning = engine.running;
     engine.stop();
     if (document.pointerLockElement) {
@@ -183,12 +187,13 @@ const challengeResetBtn = document.getElementById('btn-challenge-reset');
   document.addEventListener('pointerlockchange', () => {
     const locked = !!document.pointerLockElement;
     playOverlay.classList.toggle('hidden', locked);
-    if (!locked) stopGame();
+    if (!locked) stopGame({ preserveSuccess: true });
   });
 
   // ---- Code execution ----
   let currentChallengeRun = null;
   async function runCode() {
+    successUI?.cancel();
     // Clean up previous run
     const run = engine.beginStudentRun();
     currentChallengeRun = AppState.mode === 'challenge' ? run : null;
@@ -232,31 +237,37 @@ const challengeResetBtn = document.getElementById('btn-challenge-reset');
     editor,
     runCode,
   });
-  document.getElementById('btn-run').addEventListener('click', () => {
+  function resetGame() {
+    successUI?.cancel();
+    challengeUI.close();
+    engine.reset();
+    return runCode();
+  }
+  successUI = mountSuccessUI({
+    stop: () => stopGame({ preserveSuccess: true }),
+    reset: resetGame,
+    challengeUI,
+    isChallenge: () => AppState.mode === 'challenge',
+  });
+  engine.onGoldStarCollected = () => { void successUI.collect(); };
+
+  function runAction() {
+    successUI.cancel();
     if (AppState.mode === 'challenge') challengeUI.show();
     else runCode();
-  });
+  }
+  document.getElementById('btn-run').addEventListener('click', runAction);
   modeMenu.addEventListener('click', (event) => {
     if (event.target.closest('[data-mode]')) {
+      successUI.cancel();
       currentChallengeRun = null;
       challengeUI.setComplete(false);
       challengeUI.close();
     }
   });
 
-  document.getElementById('btn-stop').addEventListener('click', () => {
-    currentChallengeRun = null;
-    stopGame();
-  });
-
-  document.getElementById('btn-reset').addEventListener('click', () => {
-    currentChallengeRun = null;
-    challengeUI.setComplete(false);
-    engine.reset();
-    api.reset();
-    consoleOutput.innerHTML = '';
-    logToConsole('↻ Reset!', 'info');
-  });
+  document.getElementById('btn-stop').addEventListener('click', () => stopGame());
+  document.getElementById('btn-reset').addEventListener('click', resetGame);
 
   document.getElementById('btn-level').addEventListener('click', () => {
     if (!engine.levelLoaded) {
@@ -289,10 +300,10 @@ const challengeResetBtn = document.getElementById('btn-challenge-reset');
     }
   });
 
-  // ---- Challenge mode controls (stub — no functionality yet) ----
-  challengeRunBtn?.addEventListener('click', () => logToConsole('Challenge run not implemented yet.', 'warn'));
-  challengeStopBtn?.addEventListener('click', stopGame);
-  challengeResetBtn?.addEventListener('click', () => logToConsole('Challenge reset not implemented yet.', 'warn'));
+  // ---- Challenge mode controls ----
+  challengeRunBtn?.addEventListener('click', runAction);
+  challengeStopBtn?.addEventListener('click', () => stopGame());
+  challengeResetBtn?.addEventListener('click', resetGame);
 
   // ---- Resize handle ----
   const resizeHandle = document.getElementById('resize-handle');

@@ -95,14 +95,14 @@ export const PLAYER_SETTING_OPTIONS = [
 
 /** Global API completions */
 export const API_DOCS = [
-  // Temporary API: use the same gate as the runtime factory and Monaco declarations.
+  // Placement API uses the same gate as the runtime scope and Monaco declarations.
   ...(DEBUG_GOLD_STAR_ENABLED ? [{
-    label: 'createDebugGoldStar',
+    label: 'createGoldStar',
     kind: 'Function',
-    detail: 'Development only: place a glowing gold star',
-    doc: 'createDebugGoldStar(options?)\n\nPlaces a debug gold star with pulsing glow and glitter.\nReturns a GameObject with the usual position, rotation, scale and object methods.\nTouch detection is on by default; physics is off.\nThis is a development tool, not a challenge reward.\n\nExample:\nconst star = createDebugGoldStar({ position: [0, 2, 0], scale: 0.5 });',
+    detail: 'Place a spinning gold star',
+    doc: 'createGoldStar(options?)\n\nPlaces a GoldStar with pulsing glow and glitter.\nReturns a GoldStar GameObject with the usual position, rotation, scale and object methods.\nTouch detection is on by default; physics is off.\nDefault scale: 0.20. Spins on Y at 0.01 radians per frame.\nUse getSpinRate() and setSpinRate(rate) to read or change spin.\nPlayer contact destroys the star.\n\nExample:\nconst star = createGoldStar({ position: [0, 2, 0], scale: 0.20 });',
     options: SHAPE_OPTIONS,
-    completion: call('createDebugGoldStar', 'createDebugGoldStar({\n\tposition: [0, 2, 0],\n\tscale: 0.5\n})'),
+    completion: call('createGoldStar', 'createGoldStar({\n\tposition: [0, 2, 0],\n\tscale: 0.20\n})'),
   }] : []),
   {
     label: 'createCube',
@@ -342,6 +342,9 @@ export const API_DOCS = [
 
 /** Object member completions (shown after cube.) */
 export const MEMBER_DOCS = [
+  { label: 'getSpinRate', kind: 'Method', detail: 'Read GoldStar spin rate', doc: 'star.getSpinRate()\n\nReturns Y rotation in radians per frame. Default: 0.01.', completion: call('getSpinRate', 'getSpinRate()') },
+  { label: 'setSpinRate', kind: 'Method', detail: 'Set GoldStar spin rate', doc: 'star.setSpinRate(rate)\n\nSets Y rotation in radians per frame. Use 0 to stop or a negative number to reverse. Returns the star.', completion: call('setSpinRate', 'setSpinRate(${1:0.01})') },
+
   { label: 'position', kind: 'Property', detail: 'Object position (x, y, z)', completion: ident('position') },
   { label: 'rotation', kind: 'Property', detail: 'Object rotation (x, y, z)', completion: ident('rotation') },
   { label: 'scale', kind: 'Property', detail: 'Object scale (x, y, z)', completion: ident('scale') },

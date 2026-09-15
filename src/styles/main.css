@@ -309,3 +309,16 @@ html, body {
   .settings-backdrop { padding: 56px 10px 10px; align-items: stretch; }
   .settings-dialog { max-height: calc(100vh - 72px); }
 }
+
+/* Success shares the challenge card and toolbar button styles. */
+.success-dialog {
+  width: min(480px, calc(100% - 32px));
+  max-height: calc(100% - 32px);
+  color: #cdd6f4;
+}
+.success-dialog::backdrop { background: rgba(17, 17, 27, .85); }
+.success-dialog button:disabled { opacity: .45; cursor: not-allowed; }
+.success-flash {
+  position: fixed; inset: 0; z-index: 10000;
+  background: #fff; opacity: 0; pointer-events: none;
+}

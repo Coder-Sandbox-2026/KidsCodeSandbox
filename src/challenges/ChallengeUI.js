@@ -77,6 +77,9 @@ export function mountChallengeUI({ viewport, editor, runCode }) {
   });
 
   return {
+    // The current catalog contains only Challenge 1. Keep navigation ownership here.
+    hasNextChallenge() { return false; },
+    nextChallenge() { return false; },
     setComplete(complete, finished = false) {
       completion.textContent = complete ? '✅ Challenge Complete' : '❌ Challenge Incomplete';
       completion.classList.toggle('incomplete', !complete);

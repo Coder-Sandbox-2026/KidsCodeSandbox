@@ -7,8 +7,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { basisTranscoderPath, cakeUrl, goldCoinUrl, debugGoldStarUrl } from '../assets/assetSource.js';
-import { DEBUG_GOLD_STAR_ENABLED, DEBUG_GOLD_STAR_MODEL } from '../debug/debugGoldStarConfig.js';
+import { basisTranscoderPath, cakeUrl, goldCoinUrl, goldStarUrl } from '../assets/assetSource.js';
 import {
   stripAndBakeCollisionMeshes,
   visualBoundsInRootSpace,
@@ -16,6 +15,7 @@ import {
 
 export const GOLD_COIN_MODEL = 'goldCoin';
 export const CAKE_MODEL = 'cake';
+export const GOLD_STAR_MODEL = 'goldStar';
 
 const KTX2_ATTEMPTS = [
   { label: 'relative basis/', path: basisTranscoderPath() },
@@ -23,13 +23,13 @@ const KTX2_ATTEMPTS = [
 
 /** Collectible GLBs under src/assets/model/ */
 const COLLECTIBLE_DEFS = [
-  ...(DEBUG_GOLD_STAR_ENABLED ? [{
-    id: DEBUG_GOLD_STAR_MODEL,
-    url: debugGoldStarUrl,
+  {
+    id: GOLD_STAR_MODEL,
+    url: goldStarUrl,
     fileName: 'GoldStar.glb',
-    defaultName: DEBUG_GOLD_STAR_MODEL,
-    materialStyle: DEBUG_GOLD_STAR_MODEL,
-  }] : []),
+    defaultName: GOLD_STAR_MODEL,
+    materialStyle: GOLD_STAR_MODEL,
+  },
   {
     id: GOLD_COIN_MODEL,
     url: goldCoinUrl,
@@ -138,7 +138,7 @@ export class ModelLoader {
     const copy = mat.clone();
     if (!copy.isMeshStandardMaterial && !copy.isMeshPhysicalMaterial) return copy;
 
-    if (style === DEBUG_GOLD_STAR_MODEL) {
+    if (style === GOLD_STAR_MODEL) {
       copy.envMap = this._envMap;
       copy.envMapIntensity = 0.02;
       return copy;
@@ -226,7 +226,7 @@ export class ModelLoader {
     root.traverse((child) => {
       if (!child.isMesh) return;
       // GLTFLoader sanitizes spaces in .name; userData.name retains the authored name.
-      child.castShadow = name === DEBUG_GOLD_STAR_MODEL
+      child.castShadow = name === GOLD_STAR_MODEL
         ? (child.userData.name ?? child.name) === 'Gold Star'
         : true;
       child.receiveShadow = receiveShadow;

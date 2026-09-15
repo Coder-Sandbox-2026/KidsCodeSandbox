@@ -3,9 +3,8 @@
  * in the scene, just like createCube / createSphere.
  */
 import { GameObject } from './GameObject.js';
-import { CAKE_MODEL, GOLD_COIN_MODEL } from '../engine/ModelLoader.js';
-import { DEBUG_GOLD_STAR_ENABLED, DEBUG_GOLD_STAR_MODEL } from '../debug/debugGoldStarConfig.js';
-import { attachDebugGoldStar } from '../debug/debugGoldStar.js';
+import { CAKE_MODEL, GOLD_COIN_MODEL, GOLD_STAR_MODEL } from '../engine/ModelLoader.js';
+import { GoldStar } from './GoldStar.js';
 
 function applyCommonOptions(root, opts = {}) {
   if (opts.position) {
@@ -20,7 +19,7 @@ function applyCommonOptions(root, opts = {}) {
   if (opts.name) root.name = opts.name;
 }
 
-function spawnCollectible(engine, modelId, defaultName, opts = {}) {
+function spawnCollectible(engine, modelId, defaultName, opts = {}, ItemClass = GameObject) {
   if (!engine.models?.has(modelId)) {
     const extra = engine.modelLoadError?.message
       ? ` ${engine.modelLoadError.message}`
@@ -38,7 +37,7 @@ function spawnCollectible(engine, modelId, defaultName, opts = {}) {
   // Collectibles are detectable by default so onCollision works without extra setup.
   const wantCollision = opts.collision !== false;
 
-  const obj = new GameObject(root, engine, null, {
+  const obj = new ItemClass(root, engine, null, {
     collision: wantCollision && !wantPhysics,
     colliderParts,
     ownsGeometry: false,
@@ -75,14 +74,11 @@ export function createModelFactories(engine) {
     return spawnCollectible(engine, CAKE_MODEL, 'cake', opts);
   }
 
-  return {
-    createGoldCoin, createCake,
-    ...(DEBUG_GOLD_STAR_ENABLED ? {
-      createDebugGoldStar(opts = {}) {
-        const obj = spawnCollectible(engine, DEBUG_GOLD_STAR_MODEL, DEBUG_GOLD_STAR_MODEL, opts);
-        attachDebugGoldStar(engine, obj);
-        return obj;
-      },
-    } : {}),
-  };
+  function createGoldStar(opts = {}) {
+    return spawnCollectible(engine, GOLD_STAR_MODEL, 'goldStar', {
+      ...opts, scale: opts.scale ?? 0.20,
+    }, GoldStar);
+  }
+
+  return { createGoldCoin, createCake, createGoldStar };
 }

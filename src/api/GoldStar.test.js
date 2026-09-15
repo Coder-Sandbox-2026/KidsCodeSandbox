@@ -16,7 +16,7 @@ const hooks = registerHooks({
   load(url, context, next) {
     const result = next(url, context);
     if (url.endsWith('/debugGoldStarConfig.js')) return {
-      ...result, source: String(result.source).replace('import.meta.env?.DEV === true', 'true'),
+      ...result, source: String(result.source).replace('import.meta.env?.DEV === true', 'false'),
     };
     return result;
   },
@@ -24,7 +24,7 @@ const hooks = registerHooks({
 const { ModelLoader } = await import('../engine/ModelLoader.js');
 const { createModelFactories } = await import('../api/ModelFactory.js');
 const { PhysicsManager } = await import('../engine/PhysicsManager.js');
-const { updateDebugGoldStars, clearDebugGoldStars } = await import('./debugGoldStar.js');
+const { updateGoldStars, clearGoldStars } = await import('../api/GoldStar.js');
 hooks.deregister();
 
 test('actual GoldStar uses authored shadows, ITEM collider, and owned materials', async t => {
@@ -32,9 +32,9 @@ test('actual GoldStar uses authored shadows, ITEM collider, and owned materials'
   const bytes = await readFile(new URL('../assets/model/GoldStar.glb', import.meta.url));
   const gltf = await loader._gltf.parseAsync(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), '');
   loader._gltf.loadAsync = async () => gltf;
-  await loader._loadCollectible({ id: 'debugGoldStar', defaultName: 'debugGoldStar', fileName: 'GoldStar.glb', materialStyle: 'debugGoldStar' });
-  const first = loader.clone('debugGoldStar');
-  const second = loader.clone('debugGoldStar');
+  await loader._loadCollectible({ id: 'goldStar', defaultName: 'goldStar', fileName: 'GoldStar.glb', materialStyle: 'goldStar' });
+  const first = loader.clone('goldStar');
+  const second = loader.clone('goldStar');
   assert(first.colliderParts.some(part => part.role === 'item'));
   const meshes = [];
   first.root.traverse(node => { if (node.isMesh) meshes.push(node); });
@@ -52,33 +52,67 @@ test('actual GoldStar uses authored shadows, ITEM collider, and owned materials'
   await physics.init();
   t.after(() => { physics.world.free(); physics._eventQueue.free(); });
   const engine = { models: loader, scene, sceneManager: { scene }, userMeshes: [], physics, RAPIER: physics.RAPIER };
-  const star = createModelFactories(engine).createDebugGoldStar({ collision: false, position: [1, 2, 3], scale: 2 });
+  const star = createModelFactories(engine).createGoldStar({ collision: false, position: [1, 2, 3], scale: 2 });
   assert.deepEqual(star.position.toArray(), [1, 2, 3]);
   assert.equal(star.scale.x, 2);
   assert.equal(typeof star.enablePhysics, 'function');
   assert.equal(typeof star.onCollision, 'function');
-  updateDebugGoldStars(engine, 0.12);
+  star.setSpinRate(0); // Isolate scale-dependent glitter bounds from rotation.
+  updateGoldStars(engine, 0.12);
   const particle = scene.children.find(node => node.isSprite);
   assert(particle);
   const position = particle.position.clone();
   const initialSize = particle.scale.x;
   star.position.x += 100;
   star.setScale(4);
-  updateDebugGoldStars(engine, 0.12);
+  updateGoldStars(engine, 0.12);
   assert(particle.position.equals(position));
   const latest = scene.children.filter(node => node.isSprite).at(-1);
   assert(Math.abs(latest.scale.x / initialSize - 2) < 0.001);
-  updateDebugGoldStars(engine, 0.81);
+  updateGoldStars(engine, 0.81);
   assert.equal(particle.parent, null);
-  for (let i = 0; i < 100; i++) updateDebugGoldStars(engine, 0.05);
+  for (let i = 0; i < 100; i++) updateGoldStars(engine, 0.05);
   assert(scene.children.filter(node => node.isSprite).length <= 8);
   star.destroy();
   assert.equal(scene.children.length, 0);
-  clearDebugGoldStars(engine);
-  const collectible = createModelFactories(engine).createDebugGoldStar();
+  clearGoldStars(engine);
+  const collectible = createModelFactories(engine).createGoldStar();
   assert(collectible._kinematicInfo.colliders.every(collider => collider.isSensor()));
+  assert.equal(collectible.scale.x, 0.20);
+  assert.equal(collectible.getSpinRate(), 0.01);
+  const rotation = collectible.rotation.y;
+  updateGoldStars(engine, 0.001);
+  updateGoldStars(engine, 0.05);
+  assert(Math.abs(collectible.rotation.y - rotation - 0.02) < 1e-10);
+  assert.equal(collectible.setSpinRate(-0.03), collectible);
+  updateGoldStars(engine, 0.01);
+  assert(Math.abs(collectible.rotation.y - rotation + 0.01) < 1e-10);
+  collectible.setSpinRate(0);
+  const stopped = collectible.rotation.y;
+  updateGoldStars(engine, 0.01);
+  assert.equal(collectible.rotation.y, stopped);
+  assert.throws(() => collectible.setSpinRate(NaN), TypeError);
+  collectible._triggerCollision(null);
+  collectible._triggerCollision({ isPlayer: () => false });
+  assert.equal(collectible._destroyed, false);
+  let collections = 0;
+  engine.onGoldStarCollected = star => {
+    collections++;
+    assert.equal(star._destroyed, false);
+    // Reentrant collision notifications must not collect the same item twice.
+    star._triggerCollision({ isPlayer: () => true });
+  };
+  let called = false;
+  collectible.onCollision(() => { called = true; });
+  collectible._triggerCollision({ isPlayer: () => true });
+  assert(called);
+  assert(collectible._destroyed);
+  collectible._triggerCollision({ isPlayer: () => true });
+  assert.equal(collections, 1);
+  updateGoldStars(engine, 0.12);
+  assert.equal(collectible.rotation.y, stopped);
   collectible.destroy();
-  const physical = createModelFactories(engine).createDebugGoldStar({ physics: true });
+  const physical = createModelFactories(engine).createGoldStar({ physics: true });
   assert(physical._physicsInfo);
   physical.destroy();
   assert.equal(scene.children.length, 0);

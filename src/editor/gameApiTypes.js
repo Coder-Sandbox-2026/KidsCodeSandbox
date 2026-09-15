@@ -91,6 +91,12 @@ interface GameObject extends Actor {
   onClick(fn: (event: ClickEvent) => void): GameObject;
 }
 
+interface GoldStar extends GameObject {
+  /** Y rotation in radians per frame; default 0.01 */
+  getSpinRate(): number;
+  setSpinRate(rate: number): this;
+}
+
 interface Player extends Actor {
   isGrounded(): boolean;
   setSettings(settings: PlayerSettings): Player;
@@ -131,7 +137,7 @@ declare function createCylinder(options?: ShapeOptions): GameObject;
 declare function createPlane(options?: ShapeOptions): GameObject;
 declare function createGoldCoin(options?: ShapeOptions): GameObject;
 ${DEBUG_GOLD_STAR_ENABLED ? `/** Development only: a gold star with pulsing glow and glitter. Collision defaults on; physics defaults off. */
-declare function createDebugGoldStar(options?: ShapeOptions): GameObject;` : ''}
+declare function createGoldStar(options?: ShapeOptions): GoldStar;` : ''}
 declare function createCake(options?: ShapeOptions): GameObject;
 
 interface ExplosionOptions {

@@ -1,3 +1,4 @@
+import { DEBUG_GOLD_STAR_ENABLED } from '../debug/debugGoldStarConfig.js';
 /**
  * GameAPI.js – Builds the global API object injected into the user's code scope.
  * All kid-friendly functions (createCube, print, etc.) live here.
@@ -233,8 +234,8 @@ export class GameAPI {
       createPlane: wrapCreate(this.shapes.createPlane),
       createGoldCoin: wrapCreate(this.models.createGoldCoin),
       createCake: wrapCreate(this.models.createCake),
-      ...(this.models.createDebugGoldStar ? {
-        createDebugGoldStar: wrapCreate(this.models.createDebugGoldStar),
+      ...(DEBUG_GOLD_STAR_ENABLED ? {
+        createGoldStar: wrapCreate(this.models.createGoldStar),
       } : {}),
 
       playExplosion: (opts) => { engine.vfx?.playEmberExplosion(opts, run); },

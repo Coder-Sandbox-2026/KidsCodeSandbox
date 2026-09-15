@@ -10,7 +10,7 @@ import { Player } from '../api/Player.js';
 import { DefaultLevel } from './DefaultLevel.js';
 import { VFXManager } from './VFXManager.js';
 import { RunLifecycle } from './RunLifecycle.js';
-import { updateDebugGoldStars, clearDebugGoldStars } from '../debug/debugGoldStar.js';
+import { updateGoldStars, clearGoldStars } from '../api/GoldStar.js';
 import * as THREE from 'three';
 
 export class GameEngine {
@@ -213,7 +213,7 @@ export class GameEngine {
     }
 
     this.vfx?.update(dt);
-    updateDebugGoldStars(this, dt);
+    updateGoldStars(this, dt);
 
     this.renderer.render(this.sceneManager.scene, this.sceneManager.camera);
   }
@@ -241,7 +241,7 @@ export class GameEngine {
 
   /** Clear everything user-created but keep the level */
   clearUserObjects() {
-    clearDebugGoldStars(this);
+    clearGoldStars(this);
     const roots = [...this.userMeshes];
     for (const obj of roots) {
       const gameObject = obj.userData?.gameObject;
