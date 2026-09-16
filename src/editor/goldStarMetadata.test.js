@@ -46,7 +46,7 @@ async function checkMetadata(enabled, base) {
     for (const level of ['off', 'basic', 'guided', 'high']) {
       const result = resolveCompletionInsert(entry, level).insertText;
       assert.match(result, /^createGoldStar/);
-      if (level === 'guided' || level === 'high') assert.match(result, /position:.*\[0, 2, 0\]/);
+      if (level === 'guided' || level === 'high') assert.doesNotMatch(result, /\bposition\s*:/);
     }
   }
   assert(findCompletion('createGoldCoin'));
