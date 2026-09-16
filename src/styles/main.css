@@ -327,3 +327,10 @@ html, body {
 .monaco-editor .monaco-hover p > strong > code {
   color: #89dceb;
 }
+
+.success-dialog [data-action="next"] {
+  background: #f9e2af;
+  color: #1e1e2e;
+}
+.success-dialog [data-action="next"]:hover:not(:disabled) { background: #ffe9b5; }
+.success-dialog [data-action="next"]:disabled { transform: none; }

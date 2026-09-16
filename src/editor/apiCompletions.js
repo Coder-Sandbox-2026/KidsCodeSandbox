@@ -102,7 +102,7 @@ export const API_DOCS = [
     detail: 'Place a spinning gold star',
     doc: 'createGoldStar(options?)\n\nPlaces a GoldStar with pulsing glow and glitter.\nReturns a GoldStar GameObject with the usual position, rotation, scale and object methods.\nTouch detection is on by default; physics is off.\nDefault scale: 0.20. Spins on Y at 0.01 radians per frame.\nUse getSpinRate() and setSpinRate(rate) to read or change spin.\nPlayer contact destroys the star.\n\nExample:\nconst star = createGoldStar({ position: [0, 2, 0], scale: 0.20 });',
     options: SHAPE_OPTIONS,
-    completion: call('createGoldStar', 'createGoldStar({\n\tposition: [0, 2, 0],\n\tscale: 0.20\n})'),
+    completion: call('createGoldStar', 'createGoldStar({\n\tscale: 0.20\n})'),
   }] : []),
   {
     label: 'createCube',
@@ -112,8 +112,8 @@ export const API_DOCS = [
     options: SHAPE_OPTIONS,
     completion: call(
       'createCube',
-      'createCube({\n\tposition: [0, 3, -5],\n\tcolor: "${1:red}"\n})',
-      'createCube({\n\tposition: [0, 3, -5],\n\tcolor: "${1:red}",\n\tphysics: true\n})'
+      'createCube({\n\tcolor: "${1:red}"\n})',
+      'createCube({\n\tcolor: "${1:red}",\n\tphysics: true\n})'
     ),
   },
   {
@@ -124,8 +124,8 @@ export const API_DOCS = [
     options: SHAPE_OPTIONS,
     completion: call(
       'createSphere',
-      'createSphere({\n\tposition: [0, 3, -5],\n\tcolor: "${1:blue}"\n})',
-      'createSphere({\n\tposition: [0, 3, -5],\n\tcolor: "${1:blue}",\n\tphysics: true\n})'
+      'createSphere({\n\tcolor: "${1:blue}"\n})',
+      'createSphere({\n\tcolor: "${1:blue}",\n\tphysics: true\n})'
     ),
   },
   {
@@ -136,8 +136,8 @@ export const API_DOCS = [
     options: SHAPE_OPTIONS,
     completion: call(
       'createCone',
-      'createCone({\n\tposition: [0, 3, -5],\n\tcolor: "${1:green}"\n})',
-      'createCone({\n\tposition: [0, 3, -5],\n\tcolor: "${1:green}",\n\tphysics: true\n})'
+      'createCone({\n\tcolor: "${1:green}"\n})',
+      'createCone({\n\tcolor: "${1:green}",\n\tphysics: true\n})'
     ),
   },
   {
@@ -148,8 +148,8 @@ export const API_DOCS = [
     options: SHAPE_OPTIONS,
     completion: call(
       'createCylinder',
-      'createCylinder({\n\tposition: [0, 3, -5],\n\tcolor: "${1:yellow}"\n})',
-      'createCylinder({\n\tposition: [0, 3, -5],\n\tcolor: "${1:yellow}",\n\tphysics: true\n})'
+      'createCylinder({\n\tcolor: "${1:yellow}"\n})',
+      'createCylinder({\n\tcolor: "${1:yellow}",\n\tphysics: true\n})'
     ),
   },
   {
@@ -160,8 +160,8 @@ export const API_DOCS = [
     options: SHAPE_OPTIONS,
     completion: call(
       'createPlane',
-      'createPlane({\n\tposition: [0, 0, -5],\n\tcolor: "${1:white}"\n})',
-      'createPlane({\n\tposition: [0, 0, -5],\n\tcolor: "${1:white}"\n})'
+      'createPlane({\n\tcolor: "${1:white}"\n})',
+      'createPlane({\n\tcolor: "${1:white}"\n})'
     ),
   },
   {
@@ -172,8 +172,8 @@ export const API_DOCS = [
     options: SHAPE_OPTIONS,
     completion: call(
       'createGoldCoin',
-      'createGoldCoin({\n\tposition: [0, 1, 2]\n})',
-      'createGoldCoin({\n\tposition: [0, 1, 2]\n})'
+      'createGoldCoin()',
+      'createGoldCoin()'
     ),
   },
   {
@@ -184,8 +184,8 @@ export const API_DOCS = [
     options: SHAPE_OPTIONS,
     completion: call(
       'createCake',
-      'createCake({\n\tposition: [0, 1, 2]\n})',
-      'createCake({\n\tposition: [0, 1, 2]\n})'
+      'createCake()',
+      'createCake()'
     ),
   },
   {
@@ -334,7 +334,8 @@ export const API_DOCS = [
   {
     label: 'console',
     kind: 'Property',
-    detail: 'Print a message in the Console panel',
+    detail: 'Lets your code send useful messages to the Console.',
+    expandableDoc: true,
     doc: 'console.log(message)\n\nSafe console methods:\n  log, info, debug, warn, error\n  clear, assert, table\n  time, timeLog, timeEnd\n  count, countReset\n  group, groupCollapsed, groupEnd',
     completion: ident('console'),
   },

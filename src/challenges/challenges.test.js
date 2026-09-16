@@ -74,6 +74,7 @@ test('current briefing, answer, next/reset/clear, and final catalog boundary', a
   const [feedback, overlay] = viewport.children;
   for (let i = 0; i < CHALLENGES.length; i++) {
     assert.equal(ui.currentChallenge, CHALLENGES[i]);
+    assert.ok(CHALLENGES[i].title.startsWith('Challenge ' + (i + 1) + ' \u2014 '));
     assert.equal(overlay.querySelector('h2').textContent, CHALLENGES[i].title);
     assert.equal(overlay.querySelector('code').textContent, CHALLENGES[i].example);
     assert.equal(overlay.querySelector('#challenge-briefing-help').querySelector('p').textContent, CHALLENGES[i].help);

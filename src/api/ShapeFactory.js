@@ -1,3 +1,4 @@
+import { placementPosition } from './placementPosition.js';
 import { resolveColor } from './resolveColor.js';
 /**
  * ShapeFactory.js – Creates Three.js meshes + optional physics and wraps them
@@ -12,8 +13,8 @@ import { GameObject } from './GameObject.js';
  */
 function buildObject(mesh, engine, opts = {}) {
   // Position
-  if (opts.position) {
-    const p = opts.position;
+  const p = placementPosition(engine, opts.position);
+  if (p) {
     mesh.position.set(p[0] ?? 0, p[1] ?? 0, p[2] ?? 0);
   }
   // Scale

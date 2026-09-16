@@ -26,7 +26,7 @@ function simpleText(contents) {
 }
 
 function disclosure(contents) {
-  return contents.find((part) => part.supportHtml) || null;
+  return contents.find((part) => part.supportHtml && !part.value.startsWith('<strong>')) || null;
 }
 
 const getPlayer = findCompletion('getPlayer');
@@ -40,7 +40,7 @@ test('a method without an optional object literal keeps the simple hover', () =>
 
   assert.equal(contents.length, 2);
   assert.equal(disclosure(contents), null);
-  assert.match(text, /\*\*getPlayer\*\*/);
+  assert.match(contents[0].value, /color: #f9e2af;.*getPlayer/);
   assert.match(text, /```/);
   assert.match(text, /getPlayer\(\)/);
   assert.doesNotMatch(text, new RegExp(SEE_ALL_OPTIONS_LABEL));
@@ -186,4 +186,17 @@ test('verbosity request expands object-literal options in the hover', () => {
   });
   assert.equal(collapsedAgain.canIncreaseVerbosity, true);
   assert.match(disclosure(collapsedAgain.contents)?.value || '', /<details>/);
+});
+
+
+test('console has a compact summary and preserves its full documentation in disclosure', () => {
+  const entry = findHoverEntry('console');
+  const compact = buildHover(entry);
+  assert.match(simpleText(compact.contents), /useful messages/);
+  assert.doesNotMatch(simpleText(compact.contents), /timeLog|groupCollapsed/);
+  assert.equal(compact.canIncreaseVerbosity, true);
+  const expanded = buildHoverContents(entry, { expanded: true });
+  assert.match(disclosure(expanded).value, /timeLog/);
+  assert.match(disclosure(expanded).value, /groupCollapsed/);
+  assert.doesNotMatch(disclosure(expanded).value, /<details>/);
 });

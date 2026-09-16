@@ -212,10 +212,10 @@ test('createCube Guided and High stay richer than Basic', () => {
 
   const guided = complete(line, 1, createCube, 'guided');
   const high = complete(line, 1, createCube, 'high');
-  assert.match(guided, /position:/);
+  assert.doesNotMatch(guided, /position:/);
   assert.match(guided, /color:/);
   assert.doesNotMatch(guided, /physics:/);
-  assert.match(high, /position:/);
+  assert.doesNotMatch(high, /position:/);
   assert.match(high, /physics:\s*true/);
   assert.notEqual(guided, 'createCube();');
   assert.notEqual(high, 'createCube();');
@@ -268,4 +268,14 @@ test('completion positions are rounded on demand with safe static fallback', () 
   assert.equal(withCurrentPosition(template, currentPositionText(() => null)), template);
   assert.equal(currentPositionText(() => { throw Error('not ready'); }), null);
   assert.equal(currentPositionText(() => ({ x: NaN, y: 0, z: 0 })), null);
+});
+
+
+test('placement templates omit position but position remains a valid option', () => {
+  for (const item of API_DOCS.filter(item => item.label.startsWith('create') && item.options)) {
+    for (const level of ['guided', 'high']) {
+      assert.doesNotMatch(buildCompletion(item, { level }).insertText, /position\s*:/, item.label);
+    }
+    assert.ok(optionContext(item.label + '({ pos', API_DOCS, PLAYER_DOCS).some(p => p.name === 'position'));
+  }
 });

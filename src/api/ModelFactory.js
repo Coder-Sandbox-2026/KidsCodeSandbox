@@ -1,3 +1,4 @@
+import { placementPosition } from './placementPosition.js';
 /**
  * ModelFactory.js – Kid-friendly helpers that place preloaded GLB models
  * in the scene, just like createCube / createSphere.
@@ -6,9 +7,9 @@ import { GameObject } from './GameObject.js';
 import { CAKE_MODEL, GOLD_COIN_MODEL, GOLD_STAR_MODEL } from '../engine/ModelLoader.js';
 import { GoldStar } from './GoldStar.js';
 
-function applyCommonOptions(root, opts = {}) {
-  if (opts.position) {
-    const p = opts.position;
+function applyCommonOptions(root, engine, opts = {}) {
+  const p = placementPosition(engine, opts.position);
+  if (p) {
     root.position.set(p[0] ?? 0, p[1] ?? 0, p[2] ?? 0);
   }
   if (opts.scale !== undefined) {
@@ -28,7 +29,7 @@ function spawnCollectible(engine, modelId, defaultName, opts = {}, ItemClass = G
   }
 
   const { root, colliderParts } = engine.models.clone(modelId);
-  applyCommonOptions(root, opts);
+  applyCommonOptions(root, engine, opts);
   if (!opts.name) root.name = defaultName;
 
   engine.scene.add(root);

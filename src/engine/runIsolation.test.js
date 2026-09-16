@@ -396,3 +396,28 @@ test('only successful console, shape and jump-force calls report; stale player m
   assert.throws(() => setter(20), RunCancelledError);
   assert.equal(calls.length, 4);
 });
+
+
+test('placement defaults use live unrounded player coordinates with explicit override and null fallback', async t => {
+  const h = await harness(t);
+  const { scope } = h.begin();
+  // Models use the real ModelFactory with a small cloned visual fixture.
+  h.engine.models = { has: () => true, clone: () => ({ root: new THREE.Group(), colliderParts: [] }) };
+  for (const name of ['createCone', 'createCake']) {
+    h.engine.player.body.setTranslation({ x: 5.25, y: 2, z: -8.75 }, true);
+    const expected = h.engine.getPlayer().position.clone();
+    const object = scope[name]({ collision: false });
+    assert.deepEqual([...object.position.toArray()], expected.toArray());
+    const explicit = [10.12345, 2, -4];
+    assert.deepEqual([...scope[name]({ position: explicit, collision: false }).position.toArray()], explicit);
+    h.engine.player.body.setTranslation({ x: 12.25, y: 4, z: 3 }, true);
+    assert.deepEqual([...scope[name]({ collision: false }).position.toArray()], h.engine.getPlayer().position.toArray());
+  }
+  const getPlayer = h.engine.getPlayer;
+  h.engine.getPlayer = () => null;
+  assert.deepEqual([...scope.createCube().position.toArray()], [0, 0, 0]);
+  assert.deepEqual([...scope.createCake({ collision: false }).position.toArray()], [0, 0, 0]);
+  h.engine.getPlayer = () => { throw Error('not ready'); };
+  assert.deepEqual([...scope.createCube().position.toArray()], [0, 0, 0]);
+  h.engine.getPlayer = getPlayer;
+});
