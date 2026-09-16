@@ -103,14 +103,18 @@ export class GameAPI {
     this._timers = new Map();
     this._counts = new Map();
 
+    document.addEventListener('pointerlockchange', () => this._keysDown.clear());
+    document.addEventListener('blur', () => this._keysDown.clear(), true);
     document.addEventListener('keydown', (e) => {
+      if (!engine.player?.input.active) return;
+      if (e.repeat && !this._keysDown.has(e.code)) return;
       this._keysDown.add(e.code);
       this._emitKey(e, 'down');
       if (!e.repeat) this._emitKey(e, 'pressed');
     });
     document.addEventListener('keyup', (e) => {
       this._keysDown.delete(e.code);
-      this._emitKey(e, 'released');
+      if (engine.player?.input.active) this._emitKey(e, 'released');
     });
   }
 
@@ -212,25 +216,34 @@ export class GameAPI {
   }
 
   /** Build the flat API dictionary injected as globals into user code */
-  buildScope(run, { onPrint } = {}) {
+  buildScope(run, { onPrint, onCall } = {}) {
     run.assertActive();
     const self = this;
     const engine = this.engine;
+    const report = (name, value) => { if (run.active) onCall?.(name, value); };
+    const consoleAPI = this._createConsole();
+    const log = consoleAPI.log;
+    const observedConsole = { ...consoleAPI, log: (...args) => {
+      log(...args);
+      report('console.log');
+    } };
+    if (engine.player) engine.player._onJumpForceChanged = run.callback(value => report('setJumpForce', value));
     const kidConsole = Object.freeze(Object.fromEntries(
-      Object.entries(this._createConsole()).map(([name, fn]) => [name, run.bind(fn)])
+      Object.entries(observedConsole).map(([name, fn]) => [name, run.bind(fn)])
     ));
 
-    const wrapCreate = (fn) => (opts) => {
+    const wrapCreate = (fn, name) => (opts) => {
       const obj = fn(opts);
       self._objects.push(obj);
+      if (name) report(name);
       return obj;
     };
 
     const scope = {
-      createCube: wrapCreate(this.shapes.createCube),
-      createSphere: wrapCreate(this.shapes.createSphere),
-      createCone: wrapCreate(this.shapes.createCone),
-      createCylinder: wrapCreate(this.shapes.createCylinder),
+      createCube: wrapCreate(this.shapes.createCube, 'createCube'),
+      createSphere: wrapCreate(this.shapes.createSphere, 'createSphere'),
+      createCone: wrapCreate(this.shapes.createCone, 'createCone'),
+      createCylinder: wrapCreate(this.shapes.createCylinder, 'createCylinder'),
       createPlane: wrapCreate(this.shapes.createPlane),
       createGoldCoin: wrapCreate(this.models.createGoldCoin),
       createCake: wrapCreate(this.models.createCake),
@@ -245,7 +258,8 @@ export class GameAPI {
       print: (text, opts) => {
         this.hud.print(text, opts);
         this._consoleFn(String(text), 'info');
-        if (run.active) onPrint?.();
+        if (run.active) onPrint?.(text);
+        report('print', text);
       },
       setText: (id, text, opts) => this.hud.setText(id, text, opts),
       clearText: () => this.hud.clear(),
@@ -265,9 +279,13 @@ export class GameAPI {
 
       destroy: (obj) => { if (obj && obj.destroy) obj.destroy(); },
       findObject: (name) => self._objects.find(o => o.name === name) || null,
-      getPlayer: () => engine.getPlayer(),
+      getPlayer: () => {
+        const player = engine.getPlayer();
+        if (player) report('getPlayer');
+        return player;
+      },
 
-      isKeyDown: (key) => self._keysDown.has(key),
+      isKeyDown: (key) => !!engine.player?.input.active && self._keysDown.has(key),
       onKeyDown: (key, fn) => {
         self._keyHandlers.push({ key, fn, type: 'down' });
       },
@@ -288,6 +306,7 @@ export class GameAPI {
   }
 
   reset() {
+    if (this.engine.player) this.engine.player._onJumpForceChanged = null;
     this._objects = [];
     this._keyHandlers = [];
     this._groupDepth = 0;

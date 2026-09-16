@@ -1,3 +1,4 @@
+import { resolveColor } from './resolveColor.js';
 /**
  * ShapeFactory.js – Creates Three.js meshes + optional physics and wraps them
  * in GameObject instances. Each create* function is exposed globally to kids.
@@ -22,7 +23,7 @@ function buildObject(mesh, engine, opts = {}) {
     else mesh.scale.set(s, s, s);
   }
   // Color
-  if (opts.color) mesh.material.color.set(opts.color);
+  if (opts.color) mesh.material.color.set(resolveColor(opts.color));
   // Name
   if (opts.name) mesh.name = opts.name;
 

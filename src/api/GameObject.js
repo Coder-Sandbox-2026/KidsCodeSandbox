@@ -1,3 +1,4 @@
+import { resolveColor } from './resolveColor.js';
 /**
  * GameObject.js – Beginner-friendly wrapper around a Three.js object + Rapier body.
  *
@@ -102,6 +103,7 @@ export class GameObject extends Actor {
     return hex || '#ffffff';
   }
   set color(val) {
+    val = resolveColor(val);
     forEachMaterial(this.mesh, (mat) => {
       if (mat.color) mat.color.set(val);
     });

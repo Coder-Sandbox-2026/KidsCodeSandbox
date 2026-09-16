@@ -322,3 +322,8 @@ html, body {
   position: fixed; inset: 0; z-index: 10000;
   background: #fff; opacity: 0; pointer-events: none;
 }
+
+/* Option names in the API hover, including expanded options. */
+.monaco-editor .monaco-hover p > strong > code {
+  color: #89dceb;
+}

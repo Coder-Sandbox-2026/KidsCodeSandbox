@@ -1,3 +1,4 @@
+import { createChallengeValidator } from './challenges/challengeValidation.js';
 /**
  * main.js – Application entry point. Wires together the editor, engine,
  * API, and UI controls.
@@ -144,7 +145,7 @@ const challengeResetBtn = document.getElementById('btn-challenge-reset');
   }
 
   // ---- Editor ----
-  const editor = new EditorManager(editorContainer);
+  const editor = new EditorManager(editorContainer, { getPlayerPosition: () => engine.getPlayer()?.position });
 
   // ---- Engine ----
   const engine = new GameEngine(gameContainer);
@@ -192,10 +193,12 @@ const challengeResetBtn = document.getElementById('btn-challenge-reset');
 
   // ---- Code execution ----
   let currentChallengeRun = null;
+  let challengeStar = null;
   async function runCode() {
     successUI?.cancel();
     // Clean up previous run
     const run = engine.beginStudentRun();
+    challengeStar = null;
     currentChallengeRun = AppState.mode === 'challenge' ? run : null;
     challengeUI.setComplete(false);
     api.reset();
@@ -207,19 +210,28 @@ const challengeResetBtn = document.getElementById('btn-challenge-reset');
     engine.resume();
 
     const code = editor.getCode();
-    let challengePrinted = false;
-    const validChallenge = () => run.active && currentChallengeRun === run && AppState.mode === 'challenge';
-    const scope = api.buildScope(run, currentChallengeRun === run ? {
-      onPrint: () => {
-        if (validChallenge()) {
-          challengePrinted = true;
-          challengeUI.setComplete(true);
+    const challenge = challengeUI.currentChallenge;
+    const validChallenge = () => run.active && currentChallengeRun === run
+      && AppState.mode === 'challenge' && challengeUI.currentChallenge === challenge;
+    const validator = createChallengeValidator(challenge, code, {
+      isCurrent: validChallenge,
+      onComplete: () => {
+        challengeUI.setComplete(true);
+        const p = engine.getPlayer().position;
+        try {
+          challengeStar = api.models.createGoldStar({ position: [p.x + 2, p.y, p.z - 3] });
+        } catch (error) {
+          logToConsole('Could not place the challenge Gold Star: ' + error.message, 'error');
         }
       },
+    });
+    const scope = api.buildScope(run, currentChallengeRun === run ? {
+      onCall: validator.observe,
     } : undefined);
 
     await run.execute(code, scope, {
       success: () => {
+        validator.succeeded();
         logToConsole('✅ Code is running!', 'info');
       },
       error: (err) => {
@@ -228,7 +240,7 @@ const challengeResetBtn = document.getElementById('btn-challenge-reset');
         editor.highlightError(line);
       },
     });
-    if (validChallenge() && !challengePrinted) challengeUI.setComplete(false, true);
+    if (validChallenge() && !validator.complete) challengeUI.setComplete(false, true);
   }
 
   // ---- Toolbar buttons ----
@@ -236,12 +248,21 @@ const challengeResetBtn = document.getElementById('btn-challenge-reset');
     viewport: document.getElementById('viewport-pane'),
     editor,
     runCode,
+    onAdvance: () => resetGame({ runStudentCode: false }),
   });
-  function resetGame() {
+  function resetGame({ runStudentCode = true } = {}) {
     successUI?.cancel();
     challengeUI.close();
+    if (document.pointerLockElement) document.exitPointerLock();
+    playOverlay.classList.remove('hidden');
+    currentChallengeRun = null;
+    challengeStar = null;
     engine.reset();
-    return runCode();
+    if (runStudentCode) return runCode();
+    api.reset();
+    consoleOutput.innerHTML = '';
+    editor._clearDecorations();
+    challengeUI.setComplete(false);
   }
   successUI = mountSuccessUI({
     stop: () => stopGame({ preserveSuccess: true }),
@@ -249,11 +270,17 @@ const challengeResetBtn = document.getElementById('btn-challenge-reset');
     challengeUI,
     isChallenge: () => AppState.mode === 'challenge',
   });
-  engine.onGoldStarCollected = () => { void successUI.collect(); };
+  engine.onGoldStarCollected = star => {
+    if (AppState.mode === 'challenge' && star !== challengeStar) return;
+    void successUI.collect();
+  };
 
   function runAction() {
     successUI.cancel();
-    if (AppState.mode === 'challenge') challengeUI.show();
+    if (AppState.mode === 'challenge') {
+      stopGame();
+      challengeUI.show();
+    }
     else runCode();
   }
   document.getElementById('btn-run').addEventListener('click', runAction);
@@ -261,6 +288,8 @@ const challengeResetBtn = document.getElementById('btn-challenge-reset');
     if (event.target.closest('[data-mode]')) {
       successUI.cancel();
       currentChallengeRun = null;
+      challengeStar?.destroy();
+      challengeStar = null;
       challengeUI.setComplete(false);
       challengeUI.close();
     }

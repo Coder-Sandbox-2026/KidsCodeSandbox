@@ -338,3 +338,61 @@ test('current VFX and toolbar VFX still attach to the scene', async t => {
   assert.equal(toolbar.object3D.parent, h.engine.scene);
   assert.equal(h.engine.vfx._effects.size, 3);
 });
+
+
+import { CHALLENGES } from '../challenges/challengeCatalog.js';
+import { createChallengeValidator } from '../challenges/challengeValidation.js';
+
+test('number print preserves HUD, console, observer, options and undefined return', async t => {
+  const h = await harness(t);
+  const { run } = h.begin();
+  const values = [];
+  const scope = h.api.buildScope(run, { onPrint: value => values.push(value) });
+  assert.equal(scope.print(9, { duration: 0, size: 24 }), undefined);
+  assert.equal(h.hud.children[0].textContent, '9');
+  assert.equal(h.hud.children[0].style.fontSize, '24px');
+  assert.deepEqual(h.output, ['9']);
+  assert.deepEqual(values, [9]);
+  h.api.reset();
+});
+
+test('catalog answers complete through real run/API observations and stale observers cannot complete', async t => {
+  const h = await harness(t);
+  let completions = 0;
+  let oldScope;
+  for (const challenge of CHALLENGES) {
+    const { run } = h.begin();
+    const validator = createChallengeValidator(challenge, challenge.example, {
+      isCurrent: () => run.active, onComplete: () => completions++,
+    });
+    const scope = h.api.buildScope(run, { onCall: validator.observe });
+    const errors = [];
+    await run.execute(challenge.example, scope, { success: validator.succeeded, error: e => errors.push(e) });
+    assert.deepEqual(errors, [], challenge.title);
+    assert.equal(validator.complete, true, challenge.title);
+    oldScope = scope;
+  }
+  assert.equal(completions, CHALLENGES.length);
+  h.begin();
+  assert.throws(() => oldScope.getPlayer(), RunCancelledError);
+  assert.equal(completions, CHALLENGES.length);
+  h.api.reset();
+});
+
+test('only successful console, shape and jump-force calls report; stale player methods are guarded', async t => {
+  const h = await harness(t);
+  const { run } = h.begin();
+  const calls = [];
+  const scope = h.api.buildScope(run, { onCall: (name, value) => calls.push([name, value]) });
+  scope.console.info('not log');
+  const player = scope.getPlayer();
+  assert.throws(() => player.setJumpForce(-1));
+  scope.createSphere();
+  player.setJumpForce(15);
+  scope.console.log('hello');
+  assert.deepEqual(calls.map(([name]) => name), ['getPlayer', 'createSphere', 'setJumpForce', 'console.log']);
+  const setter = player.setJumpForce;
+  h.begin();
+  assert.throws(() => setter(20), RunCancelledError);
+  assert.equal(calls.length, 4);
+});

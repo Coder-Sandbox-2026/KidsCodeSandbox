@@ -1,0 +1,32 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { InputSystem } from './InputSystem.js';
+
+test('input requires capture and clears held keys, jumps and look across capture changes', t => {
+  const previous = globalThis.document;
+  const doc = Object.assign(new EventTarget(), { pointerLockElement: null });
+  globalThis.document = doc;
+  const input = new InputSystem();
+  t.after(() => { input.dispose(); globalThis.document = previous; });
+  const key = (code, repeat = false) => doc.dispatchEvent(Object.assign(new Event('keydown'), { code, repeat }));
+  key('KeyW'); key('Space');
+  assert.equal(input.isDown('KeyW'), false);
+  assert.equal(input.consumeJump(), false);
+  doc.pointerLockElement = {};
+  doc.dispatchEvent(new Event('pointerlockchange'));
+  key('KeyW'); key('Space');
+  assert.equal(input.isDown('KeyW'), true);
+  assert.equal(input.consumeJump(), true);
+  doc.dispatchEvent(Object.assign(new Event('mousemove'), { movementX: 4, movementY: 2 }));
+  doc.pointerLockElement = null;
+  doc.dispatchEvent(new Event('pointerlockchange'));
+  doc.pointerLockElement = {};
+  doc.dispatchEvent(new Event('pointerlockchange'));
+  key('KeyW', true);
+  assert.equal(input.isDown('KeyW'), false);
+  assert.deepEqual(input.consumeLookDelta(), { x: 0, y: 0 });
+  key('KeyW'); key('Space');
+  input.setEnabled(false); input.setEnabled(true);
+  assert.equal(input.isDown('KeyW'), false);
+  assert.equal(input.consumeJump(), false);
+});

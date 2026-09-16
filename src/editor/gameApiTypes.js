@@ -172,7 +172,7 @@ interface TyphoonOptions {
  */
 declare function playTyphoon(options?: TyphoonOptions | GameObject | Player | [number, number, number]): void;
 
-declare function print(text: string, options?: PrintOptions): void;
+declare function print(text: string | number, options?: PrintOptions): void;
 declare function setText(id: string, text: string, options?: PrintOptions): void;
 declare function clearText(): void;
 

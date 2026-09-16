@@ -77,6 +77,7 @@ export class Player extends Actor {
 
   setJumpForce(force) {
     this._settings.jumpForce = validatePlayerSetting('jumpForce', force);
+    this._onJumpForceChanged?.(force);
     return this;
   }
   getJumpForce() { return this._settings.jumpForce; }

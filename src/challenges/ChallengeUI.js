@@ -1,12 +1,8 @@
-const FIRST_CHALLENGE = Object.freeze({
-  title: 'Challenge 1 — Your First Message',
-  objective: 'Use the print() function to display something on the screen.',
-  example: 'print("This is my game!");',
-  help: 'print() displays a message in the output area.\n\nPut the message you want to show inside quotes and parentheses.',
-  helpExample: 'print("Hello!");\nprint("I made my first game!");',
-});
+import { CHALLENGES } from './challengeCatalog.js';
 
-export function mountChallengeUI({ viewport, editor, runCode }) {
+export function mountChallengeUI({ viewport, editor, runCode, onAdvance }) {
+  let index = 0;
+  const current = () => CHALLENGES[index];
   const completion = document.createElement('div');
   completion.className = 'challenge-completion hidden';
   completion.setAttribute('role', 'status');
@@ -34,12 +30,7 @@ export function mountChallengeUI({ viewport, editor, runCode }) {
         <button type="button" class="tb-btn" data-action="close">Close</button>
       </div>
     </section>`;
-  overlay.querySelector('h2').textContent = FIRST_CHALLENGE.title;
-  overlay.querySelector('#challenge-briefing-objective').textContent = FIRST_CHALLENGE.objective;
-  overlay.querySelector('code').textContent = FIRST_CHALLENGE.example;
   const helpSection = overlay.querySelector('#challenge-briefing-help');
-  helpSection.querySelector('p').textContent = FIRST_CHALLENGE.help;
-  helpSection.querySelector('code').textContent = FIRST_CHALLENGE.helpExample;
   const infoButton = overlay.querySelector('[data-action="info"]');
   function setHelpExpanded(expanded) {
     helpSection.classList.toggle('hidden', !expanded);
@@ -62,7 +53,7 @@ export function mountChallengeUI({ viewport, editor, runCode }) {
 
   overlay.querySelector('[data-action="answer"]').addEventListener('click', () => {
     if (editor.getCode().length > 0 && !window.confirm('Replace your current code with the challenge answer?')) return;
-    editor.setCode(FIRST_CHALLENGE.example);
+    editor.setCode(current().example);
   });
   playButton.addEventListener('click', () => {
     close();
@@ -76,10 +67,31 @@ export function mountChallengeUI({ viewport, editor, runCode }) {
     }
   });
 
-  return {
-    // The current catalog contains only Challenge 1. Keep navigation ownership here.
-    hasNextChallenge() { return false; },
-    nextChallenge() { return false; },
+  function render() {
+    const challenge = current();
+    overlay.querySelector('h2').textContent = challenge.title;
+    overlay.querySelector('#challenge-briefing-objective').textContent = challenge.objective;
+    overlay.querySelector('code').textContent = challenge.example;
+    helpSection.querySelector('p').textContent = challenge.help;
+    helpSection.querySelector('code').textContent = challenge.helpExample;
+    setHelpExpanded(false);
+  }
+  render();
+
+  const ui = {
+    get currentChallenge() { return current(); },
+    hasNextChallenge() { return index + 1 < CHALLENGES.length; },
+    async nextChallenge() {
+      if (!ui.hasNextChallenge()) return false;
+      index++;
+      close();
+      render();
+      ui.setComplete(false);
+      editor.setCode('');
+      await onAdvance();
+      ui.show();
+      return true;
+    },
     setComplete(complete, finished = false) {
       completion.textContent = complete ? '✅ Challenge Complete' : '❌ Challenge Incomplete';
       completion.classList.toggle('incomplete', !complete);
@@ -94,4 +106,5 @@ export function mountChallengeUI({ viewport, editor, runCode }) {
     },
     close,
   };
+  return ui;
 }

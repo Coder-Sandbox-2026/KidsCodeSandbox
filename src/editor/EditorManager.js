@@ -9,7 +9,7 @@ import { registerAutocomplete } from './AutocompleteProvider.js';
 import { GAME_API_DTS } from './gameApiTypes.js';
 import { bindHoverDisclosureLayout } from './hoverLayout.js';
 
-registerAutocomplete(monaco);
+
 
 const typescript = monacoTypescript || monaco.languages?.typescript;
 const KID_CODE_URI = monaco.Uri.parse('file:///kids-code.js');
@@ -70,7 +70,8 @@ print("Hello! I made a red cube!");
 `;
 
 export class EditorManager {
-  constructor(container) {
+  constructor(container, completionContext = {}) {
+    registerAutocomplete(monaco, completionContext);
     monaco.editor.defineTheme('kidsDark', {
       base: 'vs-dark',
       inherit: true,
@@ -111,6 +112,7 @@ export class EditorManager {
       wordWrap: 'on',
       fixedOverflowWidgets: true,
       suggestOnTriggerCharacters: true,
+      inlineSuggest: { showToolbar: 'never' },
       quickSuggestions: { other: 'on', comments: 'off', strings: 'on' },
       quickSuggestionsDelay: 0,
       wordBasedSuggestions: 'currentDocument',

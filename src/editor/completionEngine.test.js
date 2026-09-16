@@ -244,3 +244,28 @@ test('every live API completion is token-scoped and keeps High richer than Basic
     }
   }
 });
+
+
+import { optionContext, currentPositionText, withCurrentPosition } from './completionEngine.js';
+
+test('option suggestions use the called API and omit used fields and unsafe contexts', () => {
+  const options = source => optionContext(source, API_DOCS, PLAYER_DOCS);
+  assert.ok(options('createCube({\n ma').some(p => p.name === 'mass'));
+  assert.ok(!options('playTyphoon({ ma').some(p => p.name === 'mass'));
+  assert.ok(!options('createCube({ mass: 1, ma').some(p => p.name === 'mass'));
+  assert.ok(options('createCube({ position: [0, 3, -5], co').some(p => p.name === 'color'));
+  assert.ok(options('player.setSettings({ wa').some(p => p.name === 'walkSpeed'));
+  for (const source of ['unknown({ ma', 'obj.createCube({ ma', 'createCube({ position: [ma',
+    'createCube({ nested: { ma', 'createCube({ color: "ma', '/* createCube({ ma',
+    'print({ ma', 'createCube({ mass: ma']) assert.equal(options(source), null, source);
+});
+
+test('completion positions are rounded on demand with safe static fallback', () => {
+  const position = currentPositionText(() => ({ x: 1.00012, y: 4.9, z: -31.1223000009 }));
+  assert.equal(position, '[1.0, 4.9, -31.1]');
+  const template = 'createCube({ position: [0, 3, -5] })';
+  assert.equal(withCurrentPosition(template, position), 'createCube({ position: [1.0, 4.9, -31.1] })');
+  assert.equal(withCurrentPosition(template, currentPositionText(() => null)), template);
+  assert.equal(currentPositionText(() => { throw Error('not ready'); }), null);
+  assert.equal(currentPositionText(() => ({ x: NaN, y: 0, z: 0 })), null);
+});

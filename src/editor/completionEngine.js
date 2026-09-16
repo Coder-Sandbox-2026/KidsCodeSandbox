@@ -197,3 +197,57 @@ export function completeLine(line, partialStart, item, level) {
   });
   return replaceWord(line, partialStart, wordEndColumn, insertText);
 }
+
+/** Read only when generating insert text; documentation metadata stays static. */
+export function currentPositionText(getPosition) {
+  try {
+    const p = getPosition?.();
+    if (p && [p.x, p.y, p.z].every(Number.isFinite)) {
+      return '[' + [p.x, p.y, p.z].map(n => n.toFixed(1)).join(', ') + ']';
+    }
+  } catch { /* The game may not be initialized yet. */ }
+  return null;
+}
+
+export function withCurrentPosition(text, position) {
+  return position ? text.replace(/(\bposition\s*:\s*)\[[^\]\n]*\]/g, (_, prefix) => prefix + position) : text;
+}
+
+/** Conservative first-argument options context. Strings/comments retain offsets. */
+export function optionContext(source, globals, playerMethods) {
+  let masked = '';
+  for (let i = 0; i < source.length;) {
+    const rest = source.slice(i);
+    const token = rest.match(/^(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\/\*[^]*?\*\/|\/\/[^\n]*(?:\n|$))/);
+    if (token) {
+      masked += ' '.repeat(token[0].length);
+      i += token[0].length;
+    } else {
+      // Templates, regex literals and unfinished strings are intentionally skipped.
+      if (/['"`/]/.test(source[i])) return null;
+      masked += source[i++];
+    }
+  }
+  const stack = [];
+  for (let i = 0; i < masked.length; i++) {
+    const ch = masked[i];
+    if ('({['.includes(ch)) stack.push({ ch, index: i });
+    else if (')}]'.includes(ch)) {
+      if (stack.at(-1)?.ch !== ({ ')': '(', '}': '{', ']': '[' })[ch]) return null;
+      stack.pop();
+    }
+  }
+  const object = stack.at(-1);
+  if (object?.ch !== '{') return null;
+  const before = masked.slice(0, object.index);
+  const call = before.match(/(?:^|[^\w$.])(?:(player)\.)?([A-Za-z_$][\w$]*)\s*\(\s*$/);
+  if (!call) return null;
+  const entry = (call[1] ? playerMethods : globals).find(item => item.label === call[2]);
+  if (!entry?.options?.length) return null;
+  // Some APIs (print/setText) take their options after another argument.
+  if (!/\(\s*(?:options|settings)\??\s*\)/.test(entry.doc.split('\n')[0])) return null;
+  const body = masked.slice(object.index + 1);
+  if (/[{}]/.test(body) || !/(?:^|,)\s*[\w$]*$/.test(body)) return null;
+  const used = new Set([...body.matchAll(/(?:^|,)\s*([\w$]+)\s*:/g)].map(m => m[1]));
+  return entry.options.filter(option => !used.has(option.name));
+}
