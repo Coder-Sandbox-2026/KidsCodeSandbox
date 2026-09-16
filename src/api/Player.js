@@ -140,7 +140,7 @@ export class Player extends Actor {
 
   update(dt) {
     if (!this.input.enabled) return;
-    this.cameraController.applyLook(this.input.consumeLookDelta());
+    this.cameraController.applyLook(this.input.consumeLookDelta(dt));
     const newPos = this.movementController.update(dt, this.input, this.cameraController.yaw);
     this.cameraController.applyToActor(newPos);
     this._position.set(newPos.x, newPos.y, newPos.z);

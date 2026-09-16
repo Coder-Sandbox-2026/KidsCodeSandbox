@@ -74,13 +74,31 @@ function renderChoice(field, current, store) {
   return group;
 }
 
-function renderBody(body, store) {
+function renderBody(body, store, category, navigate) {
   body.replaceChildren();
-  const values = store.getAll();
+  if (category) {
+    const back = document.createElement('button');
+    back.type = 'button';
+    back.className = 'tb-btn';
+    back.textContent = 'Back to Settings';
+    back.addEventListener('click', () => navigate(null));
+    body.appendChild(back);
+    body.appendChild(renderChoice(category, store.get(category.key), store));
+    return;
+  }
   for (const field of SETTINGS_SCHEMA) {
-    if (field.type === 'choice') {
-      body.appendChild(renderChoice(field, values[field.key], store));
-    }
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'settings-option settings-category';
+    const title = document.createElement('span');
+    title.className = 'settings-option-label';
+    title.textContent = field.label;
+    const summary = document.createElement('span');
+    summary.className = 'settings-option-hint';
+    summary.textContent = field.summary;
+    button.append(title, summary);
+    button.addEventListener('click', () => navigate(field));
+    body.appendChild(button);
   }
 }
 
@@ -93,13 +111,25 @@ export function mountSettingsPanel(store) {
   if (!button || !backdrop || !dialog || !closeBtn || !body) return;
 
   let lastFocus = null;
+  let category = null;
+  function navigate(next) {
+    const previous = category;
+    category = next;
+    renderBody(body, store, category, navigate);
+    const focus = category
+      ? body.querySelector('input:checked')
+      : body.querySelectorAll('button')[Math.max(0, SETTINGS_SCHEMA.indexOf(previous))];
+    focus?.focus();
+  }
 
   function open() {
     lastFocus = document.activeElement;
-    renderBody(body, store);
+    if (document.pointerLockElement) document.exitPointerLock();
+    category = null;
+    renderBody(body, store, category, navigate);
     backdrop.classList.remove('hidden');
     button.setAttribute('aria-expanded', 'true');
-    const first = dialog.querySelector('input:checked, input, button');
+    const first = body.querySelector('button');
     first?.focus();
   }
 
@@ -125,6 +155,8 @@ export function mountSettingsPanel(store) {
   });
 
   store.subscribe(() => {
-    if (!backdrop.classList.contains('hidden')) renderBody(body, store);
+    for (const input of body.querySelectorAll('input[type=radio]')) {
+      input.checked = store.get(input.name) === input.value;
+    }
   });
 }

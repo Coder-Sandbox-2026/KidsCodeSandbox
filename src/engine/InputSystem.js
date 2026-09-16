@@ -1,9 +1,19 @@
+import { appSettings } from '../settings/appSettings.js';
+
+const SIMPLE_TURN_SPEED = Math.PI / 2; // 90 degrees per second.
+
 /**
  * InputSystem.js – Keyboard and mouse input for movement / camera controllers.
  * Does not decide how an actor moves; it only reports current input.
  */
 export class InputSystem {
-  constructor() {
+  constructor(settings = appSettings) {
+    this.controlStyle = settings.get('controlStyle') === 'simple' ? 'simple' : 'experienced';
+    this._unsubscribe = settings.subscribe((values, key) => {
+      if (key !== 'controlStyle') return;
+      this.controlStyle = values.controlStyle === 'simple' ? 'simple' : 'experienced';
+      this.clear();
+    });
     this.enabled = true;
     this.keys = Object.create(null);
     this._mouseDx = 0;
@@ -14,6 +24,7 @@ export class InputSystem {
       if (!this.active) return;
       if (e.repeat && !this.keys[e.code]) return;
       this.keys[e.code] = true;
+      if (this.controlStyle === 'simple' && e.code.startsWith('Arrow')) e.preventDefault();
       if (e.code === 'Space') {
         e.preventDefault();
         this._jumpQueued = true;
@@ -23,7 +34,7 @@ export class InputSystem {
       this.keys[e.code] = false;
     };
     this._onMouse = (e) => {
-      if (!this.active) return;
+      if (!this.active || this.controlStyle === 'simple') return;
       this._mouseDx += e.movementX;
       this._mouseDy += e.movementY;
     };
@@ -48,15 +59,24 @@ export class InputSystem {
   }
 
   isDown(code) {
+    if (this.controlStyle === 'simple') {
+      if (code === 'KeyA' || code === 'KeyD') return false;
+      code = ({ KeyW: 'ArrowUp', KeyS: 'ArrowDown' })[code] || code;
+    }
     return this.active && !!this.keys[code];
   }
 
-  consumeLookDelta() {
+  consumeLookDelta(dt = 0) {
     const dx = this._mouseDx;
     const dy = this._mouseDy;
     this._mouseDx = 0;
     this._mouseDy = 0;
-    return this.active ? { x: dx, y: dy } : { x: 0, y: 0 };
+    if (!this.active) return { x: 0, y: 0 };
+    if (this.controlStyle === 'simple') {
+      const direction = Number(this.isDown('ArrowRight')) - Number(this.isDown('ArrowLeft'));
+      return { x: 0, y: 0, turnRadians: direction * SIMPLE_TURN_SPEED * dt };
+    }
+    return { x: dx, y: dy };
   }
 
   consumeJump() {
@@ -78,6 +98,7 @@ export class InputSystem {
   }
 
   dispose() {
+    this._unsubscribe();
     document.removeEventListener('pointerlockchange', this._onCaptureChange);
     document.removeEventListener('blur', this._onCaptureChange, true);
     document.removeEventListener('keydown', this._onKeyDown);

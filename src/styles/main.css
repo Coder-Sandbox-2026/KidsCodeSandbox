@@ -336,3 +336,9 @@ html, body {
 }
 .success-dialog [data-action="next"]:hover:not(:disabled) { background: #ffe9b5; }
 .success-dialog [data-action="next"]:disabled { transform: none; }
+
+.settings-category {
+  width: 100%; flex-direction: column; align-items: flex-start;
+  margin-bottom: 10px; text-align: left; font: inherit; color: inherit;
+}
+.settings-option-hint { white-space: pre-line; }

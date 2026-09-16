@@ -6,6 +6,7 @@ export const CODE_COACH_LEVELS = ['off', 'basic', 'guided', 'high'];
 
 export const SETTINGS_DEFAULTS = {
   codeCoach: 'high',
+  controlStyle: 'experienced',
 };
 
 export const SETTINGS_SCHEMA = [
@@ -13,6 +14,7 @@ export const SETTINGS_SCHEMA = [
     key: 'codeCoach',
     type: 'choice',
     label: 'Code Coach',
+    summary: 'Editor help and autocomplete settings',
     description: 'How much help should the editor give you when you choose a code suggestion?',
     hint: '💡 You can change this anytime. As you get better at coding, try turning the help down!',
     default: 'high',
@@ -21,6 +23,18 @@ export const SETTINGS_SCHEMA = [
       { value: 'basic', label: 'Basic', hint: 'Adds the basic function structure.' },
       { value: 'guided', label: 'Guided', hint: 'Shows you the parameters and code structure.' },
       { value: 'high', label: 'High', hint: 'Gives you a complete code template to get started.' },
+    ],
+  },
+  {
+    key: 'controlStyle',
+    type: 'choice',
+    label: 'Controls',
+    summary: 'Choose how you move around the game world',
+    description: 'Choose the controls that feel easiest for you.',
+    default: 'experienced',
+    options: [
+      { value: 'experienced', label: 'Experienced', hint: 'For players familiar with 3D games.\nW A S D: Move | Mouse: Look | Space: Jump' },
+      { value: 'simple', label: 'Simple', hint: 'Easy keyboard controls. No mouse looking.\nUp/Down arrows: Move | Left/Right arrows: Turn | Space: Jump' },
     ],
   },
 ];
