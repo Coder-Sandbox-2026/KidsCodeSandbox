@@ -23,12 +23,8 @@ html, body {
 .toolbar-context { gap: 10px; flex: 0 0 400px; margin-left: 20px; }
 .toolbar-execution {
   gap: 6px;
-  /* Follow the actual split-pane geometry without changing resize logic. */
-  position: fixed;
-  position-anchor: --game-viewport;
-  left: anchor(center);
-  top: 23px;
-  transform: translate(-50%, -50%);
+  /* Reserve space for controls; share spare width with the right utilities. */
+  margin-left: auto;
 }
 .toolbar-actions { gap: 6px; }
 
@@ -78,6 +74,12 @@ html, body {
 .tb-btn.reset { background: #f9e2af; color: #1e1e2e; }
 .tb-btn.reset:hover { background: #f5c2e7; }
 .tb-btn.small { padding: 6px 10px; font-size: 16px; }
+
+@media (max-width: 1400px) {
+  #toolbar { gap: 10px; }
+  #toolbar .toolbar-context { gap: 8px; margin-left: 8px; }
+  #toolbar .tb-btn:not(.small) { padding-inline: 12px; }
+}
 
 /* Dropdown */
 .dropdown { position: relative; }
