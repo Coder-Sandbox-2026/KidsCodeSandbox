@@ -34,7 +34,8 @@ export function ident(name, assigned) {
 /** Options for createCube / createSphere / createCone / createCylinder / createPlane / createGoldCoin / createCake */
 export const SHAPE_OPTIONS = [
   optionField('position', '[x, y, z]', 'Where to put the object in the world.', { example: '[0, 3, -5]' }),
-  optionField('scale', 'a number or [x, y, z]', 'How big the object is.', { example: '2' }),
+  optionField('rotation', '[x, y, z] degrees', 'Rotation uses degrees, such as [0, 90, 0].', { example: '[0, 90, 0]' }),
+  optionField('scale', 'a number or [x, y, z]', 'Size in percent: 100 is normal, 50 is half, 200 is double.', { example: '100' }),
   optionField('color', 'text', 'A color name like "red" or a hex code like "#ff0000".', { example: '"red"' }),
   optionField('physics', 'true or false', 'If true, the object falls and can be pushed.', { example: 'true' }),
   optionField('collision', 'true or false', 'If true, the object notices when something touches it. This does not make it fall.', { example: 'true' }),
@@ -53,7 +54,7 @@ export const PRINT_OPTIONS = [
   optionField('duration', 'a number', 'How many seconds the text stays on screen. Default is 10. Use 0 to keep it forever.', { example: '30' }),
 ];
 
-/** Options for playExplosion() / playEmberExplosion() */
+/** Options for playExplosion() */
 export const EXPLOSION_OPTIONS = [
   optionField('position', '[x, y, z]', 'Where the explosion happens. Skip this to play it in front of you.', { example: '[0, 2, -8]' }),
   optionField('radius', 'a number', 'How wide the blast is. Default is 3. The biggest you can use is 10.', { example: '3' }),
@@ -120,9 +121,9 @@ export const API_DOCS = [
     label: 'createGoldStar',
     kind: 'Function',
     detail: 'Place a spinning gold star',
-    doc: 'createGoldStar(options?)\n\nPlaces a GoldStar with pulsing glow and glitter.\nReturns a GoldStar GameObject with the usual position, rotation, scale and object methods.\nTouch detection is on by default; physics is off.\nDefault scale: 0.20. Spins on Y at 0.01 radians per frame.\nUse getSpinRate() and setSpinRate(rate) to read or change spin.\nPlayer contact destroys the star.\n\nExample:\nconst star = createGoldStar({ position: [0, 2, 0], scale: 0.20 });',
+    doc: 'createGoldStar(options?)\n\nPlaces a GoldStar with pulsing glow and glitter.\nReturns a GoldStar GameObject with the usual position, rotation, scale and object methods.\nTouch detection is on by default; physics is off.\nDefault scale: 20%. Spins on Y at 0.01 radians per frame.\nUse getSpinRate() and setSpinRate(rate) to read or change spin.\nPlayer contact destroys the star.\n\nExample:\nconst star = createGoldStar({ position: [0, 2, 0], scale: 20 });',
     options: SHAPE_OPTIONS,
-    completion: call('createGoldStar', 'createGoldStar({\n\tscale: 0.20\n})'),
+    completion: call('createGoldStar', 'createGoldStar({\n\tscale: 20\n})'),
   }] : []),
   {
     label: 'createCube',
@@ -188,12 +189,12 @@ export const API_DOCS = [
     label: 'createGoldCoin',
     kind: 'Function',
     detail: 'Place a gold coin you can collect',
-    doc: 'createGoldCoin(options)\n\nPlaces a gold coin in the world.\nIt notices when the player touches it, but it does not fall\nor get pushed (unless you call enablePhysics()).\n\nOptions: position, scale, color, name, collision, physics\n\nExample:\nconst coin = createGoldCoin({ position: [0, 1, 2] });\ncoin.onCollision((other) => {\n  if (other && other.isPlayer()) {\n    coin.destroy();\n    print("You got a coin!");\n  }\n});',
-    options: SHAPE_OPTIONS,
+    doc: 'createGoldCoin(options?)\n\nPlaces a spinning, collectible coin. Default position is your body position with Y + 0.5. Scale uses percentages: 100 normal, 50 half, 200 double. Rotation uses degrees. A coin spawned touching you arms after you leave it; returning collects it with a sound.\n\nExample:\nconst coin = createGoldCoin({ scale: 70 });\ncoin.setSpinRate(2);',
+    options: SHAPE_OPTIONS.map(option => option.name === 'position' ? { ...option, playerYOffset: 0.5 } : option),
     completion: call(
       'createGoldCoin',
       'createGoldCoin()',
-      'createGoldCoin()'
+      'createGoldCoin({\n\tscale: ${1:100}\n})'
     ),
   },
   {
@@ -220,18 +221,7 @@ export const API_DOCS = [
       'playExplosion({\n\tposition: [0, 2, -8],\n\tradius: ${1:3}\n})'
     ),
   },
-  {
-    label: 'playEmberExplosion',
-    kind: 'Function',
-    detail: 'Play the ember explosion effect (same as playExplosion)',
-    doc: 'playEmberExplosion(options)\n\nSame as playExplosion(). This is the VFX module calling method.',
-    options: EXPLOSION_OPTIONS,
-    completion: call(
-      'playEmberExplosion',
-      'playEmberExplosion()',
-      'playEmberExplosion({\n\tposition: [0, 2, -8],\n\tradius: ${1:3}\n})'
-    ),
-  },
+
   {
     label: 'playTyphoon',
     kind: 'Function',
@@ -271,7 +261,7 @@ export const API_DOCS = [
     label: 'update',
     kind: 'Function',
     detail: 'Run code every frame',
-    doc: 'update(callback)\n\nCalls your function every frame.\n\nExample:\nupdate((dt) => {\n  cube.rotation.y += 0.02;\n});',
+    doc: 'update(callback)\n\nCalls your function every frame.\n\nExample:\nupdate((dt) => {\n  cube.rotation.y += 1;\n});',
     completion: call('update', 'update((${1:dt}) => {\n\t${0}\n})'),
   },
   {
@@ -363,15 +353,15 @@ export const API_DOCS = [
 
 /** Object member completions (shown after cube.) */
 export const MEMBER_DOCS = [
-  { label: 'getSpinRate', kind: 'Method', detail: 'Read GoldStar spin rate', doc: 'star.getSpinRate()\n\nReturns Y rotation in radians per frame. Default: 0.01.', completion: call('getSpinRate', 'getSpinRate()') },
-  { label: 'setSpinRate', kind: 'Method', detail: 'Set GoldStar spin rate', doc: 'star.setSpinRate(rate)\n\nSets Y rotation in radians per frame. Use 0 to stop or a negative number to reverse. Returns the star.', completion: call('setSpinRate', 'setSpinRate(${1:0.01})') },
+  { label: 'getSpinRate', kind: 'Method', detail: 'Read collectible spin rate', doc: 'star.getSpinRate()\n\nGoldCoin: speed multiplier, default 1. GoldStar: radians per frame, default 0.01.', completion: call('getSpinRate', 'getSpinRate()') },
+  { label: 'setSpinRate', kind: 'Method', detail: 'Set collectible spin rate', doc: 'star.setSpinRate(rate)\n\nGoldCoin uses a speed multiplier: 0 stops, 0.5 half, 1 normal, 2 double. GoldStar uses radians per frame. Use 0 to stop or a negative number to reverse. Returns the star.', completion: call('setSpinRate', 'setSpinRate(${1:0.01})') },
 
   { label: 'position', kind: 'Property', detail: 'Object position (x, y, z)', completion: ident('position') },
-  { label: 'rotation', kind: 'Property', detail: 'Object rotation (x, y, z)', completion: ident('rotation') },
-  { label: 'scale', kind: 'Property', detail: 'Object scale (x, y, z)', completion: ident('scale') },
+  { label: 'rotation', kind: 'Property', detail: 'Object rotation in degrees (x, y, z)', completion: ident('rotation') },
+  { label: 'scale', kind: 'Property', detail: 'Object scale in percent (100 is normal)', completion: ident('scale') },
   { label: 'color', kind: 'Property', detail: 'Set object color', completion: ident('color', 'color = "${1:red}"') },
   { label: 'setColor', kind: 'Method', detail: 'Set object color', completion: call('setColor', 'setColor("${1:red}")') },
-  { label: 'setScale', kind: 'Method', detail: 'Set object scale', completion: call('setScale', 'setScale(${1:1}, ${2:1}, ${3:1})') },
+  { label: 'setScale', kind: 'Method', detail: 'Set object scale in percent', completion: call('setScale', 'setScale(${1:100}, ${2:100}, ${3:100})') },
   { label: 'rotate', kind: 'Method', detail: 'Rotate by degrees', completion: call('rotate', 'rotate(${1:0}, ${2:45}, ${3:0})') },
   {
     label: 'enablePhysics',

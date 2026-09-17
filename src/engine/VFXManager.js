@@ -120,6 +120,13 @@ export class VFXManager {
     }
 
     this._effects.add(effect);
+    this.engine.audio?.playSfx('charging');
+    let explosionPlayed = false;
+    effect.on('explode', () => {
+      if (explosionPlayed || (run && !run.active)) return;
+      explosionPlayed = true;
+      this.engine.audio?.playSfx('explosion');
+    });
     effect.on('finished', () => {
       if (!effect.config?.loop) this._disposeEffect(effect);
     });

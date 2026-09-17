@@ -58,15 +58,7 @@ if (typescript?.javascriptDefaults) {
 }
 
 const DEFAULT_CODE = `// 🎮 Welcome to Kids Code 3D!
-// Write JavaScript below and press ▶ Run to see it in the 3D world!
-
-createCube({
-    position: [0, 3, -5],
-    color: "red",
-    physics: true
-});
-
-print("Hello! I made a red cube!");
+// Write your JavaScript code below, then press ▶ Run!
 `;
 
 export class EditorManager {

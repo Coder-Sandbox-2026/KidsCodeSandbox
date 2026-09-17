@@ -8,6 +8,7 @@ import { createModelFactories } from './ModelFactory.js';
 import { GameObject } from './GameObject.js';
 import { HUD } from './HUD.js';
 import { Actor } from '../engine/Actor.js';
+import { studentCreationOptions, studentObject } from './studentTransforms.js';
 
 const MAX_FORMAT_DEPTH = 8;
 
@@ -233,10 +234,18 @@ export class GameAPI {
     ));
 
     const wrapCreate = (fn, name) => (opts) => {
-      const obj = fn(opts);
+      const obj = fn(studentCreationOptions(opts));
       self._objects.push(obj);
+      const destroy = obj.destroy;
+      obj.destroy = function (...args) {
+        try { return destroy.apply(this, args); }
+        finally {
+          const index = self._objects.indexOf(obj);
+          if (index >= 0) self._objects.splice(index, 1);
+        }
+      };
       if (name) report(name);
-      return obj;
+      return studentObject(obj);
     };
 
     const scope = {
@@ -252,7 +261,6 @@ export class GameAPI {
       } : {}),
 
       playExplosion: (opts) => { engine.vfx?.playEmberExplosion(opts, run); },
-      playEmberExplosion: (opts) => { engine.vfx?.playEmberExplosion(opts, run); },
       playTyphoon: (options) => { engine.vfx?.createTyphoon(options, run); },
 
       print: (text, opts) => {
@@ -278,7 +286,7 @@ export class GameAPI {
       },
 
       destroy: (obj) => { if (obj && obj.destroy) obj.destroy(); },
-      findObject: (name) => self._objects.find(o => o.name === name) || null,
+      findObject: (name) => studentObject(self._objects.find(o => o.name === name) || null),
       getPlayer: () => {
         const player = engine.getPlayer();
         if (player) report('getPlayer');

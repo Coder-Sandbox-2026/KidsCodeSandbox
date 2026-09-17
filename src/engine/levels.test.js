@@ -442,3 +442,24 @@ test('all eleven challenge stages have one tessellated checker surface without c
     }
   }
 });
+
+
+test('Create reuses stages 1, 7 and 11 and starts without enabling Challenge systems', async t => {
+  const { selectedStage, CREATE_LEVEL_CHOICES } = await import('./stageSelection.js');
+  const engine = await fixture(t);
+  assert.deepEqual(CREATE_LEVEL_CHOICES.map(choice => choice.label),
+    Array.from({ length: 11 }, (_, i) => `Level ${i + 1}`));
+  for (const level of [1, 7, 11]) {
+    const stage = selectedStage({ mode: 'create', level, challengeLevel: 2 });
+    assert.equal(stage.challenge, false);
+    assert.equal(stage.levelId, `challenge-${level}`);
+    engine.loadLevel(stage.levelId);
+    assert.ok(engine.level instanceof CHALLENGE_LEVEL_CLASSES[stage.levelId]);
+    engine.player.getPlayerPosition().forEach((value, index) =>
+      assert.ok(Math.abs(value - CHALLENGE_LEVEL_CONFIG[level].playerPosition[index]) < 1e-4));
+    assert.equal(engine.userMeshes.length, 0);
+    const challenge = selectedStage({ mode: 'challenge', level: 2, challengeLevel: level });
+    assert.equal(challenge.challenge, true);
+    assert.equal(challenge.levelId, stage.levelId);
+  }
+});

@@ -19,8 +19,35 @@ const { GameEngine } = await import('./GameEngine.js');
 const { GameAPI } = await import('../api/GameAPI.js');
 const { PhysicsManager } = await import('./PhysicsManager.js');
 const { Player } = await import('../api/Player.js');
+const { AudioManager } = await import('../audio/AudioManager.js');
 const { VFXManager } = await import('./VFXManager.js');
 hook.deregister();
+
+test('Run, Reset, level changes and simulation Stop preserve music until explicit music Stop', async t => {
+  const h = await harness(t);
+  const tracks = [];
+  h.engine.audio = new AudioManager(() => {
+    const track = { currentTime: 0, plays: 0, play() { this.plays++; return Promise.resolve(); }, pause() {} };
+    tracks.push(track); return track;
+  });
+  h.engine.audio.playMusic();
+  const track = tracks[0];
+  track.currentTime = 15;
+  h.begin(); h.engine.audio.playMusic();
+  h.engine.reset(); h.engine.audio.playMusic();
+  assert.equal(track.currentTime, 15);
+  assert.equal(track.plays, 1);
+  assert.equal(tracks.length, 1);
+  h.engine.loadLevel('challenge-1');
+  assert.equal(track.currentTime, 15);
+  h.engine.stop();
+  assert.equal(track.currentTime, 15);
+  assert.equal(h.engine.audio.musicActive, true);
+  h.engine.stop();
+  h.engine.audio.stopMusic();
+  assert.equal(track.currentTime, 0);
+  assert.equal(h.engine.audio.musicActive, false);
+});
 
 class Element {
   constructor() { this.children = []; this.style = {}; this.offsetHeight = 16; }

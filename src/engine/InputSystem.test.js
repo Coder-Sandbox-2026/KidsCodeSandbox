@@ -82,3 +82,43 @@ test('control styles map movement, turning and mouse look with capture and clean
   input.dispose();
   assert.equal(unsubscribed, true);
 });
+
+
+test('experienced arrows alias WASD only in gameplay and preserve editor/UI navigation', t => {
+  const previous = globalThis.document;
+  const doc = Object.assign(new EventTarget(), { pointerLockElement: {}, activeElement: null });
+  globalThis.document = doc;
+  let change;
+  const input = new InputSystem({ get: () => 'experienced', subscribe: fn => {
+    change = fn; return () => {};
+  } });
+  t.after(() => { input.dispose(); globalThis.document = previous; });
+  const key = (type, code) => doc.dispatchEvent(Object.assign(new Event(type, { cancelable: true }), { code }));
+  for (const [wasd, arrow] of [['KeyW', 'ArrowUp'], ['KeyA', 'ArrowLeft'], ['KeyS', 'ArrowDown'], ['KeyD', 'ArrowRight']]) {
+    key('keydown', wasd); assert.equal(input.isDown(wasd), true);
+    key('keyup', wasd); assert.equal(input.isDown(wasd), false);
+    assert.equal(key('keydown', arrow), false);
+    assert.equal(input.isDown(wasd), true);
+    key('keydown', wasd); key('keyup', arrow);
+    assert.equal(input.isDown(wasd), true); // Releasing one alias retains the other.
+    input.clear();
+  }
+  change({ controlStyle: 'simple' }, 'controlStyle');
+  key('keydown', 'ArrowLeft');
+  assert.equal(input.isDown('KeyA'), false); // Existing Simple turning is unchanged.
+  assert.equal(input.consumeLookDelta(1).turnRadians, -Math.PI / 2);
+  change({ controlStyle: 'experienced' }, 'controlStyle');
+  for (const selector of ['.monaco-editor', 'input', 'select', 'button', 'dialog']) {
+    const ui = { closest: query => query.includes(selector) ? {} : null };
+    key('keydown', 'ArrowUp');
+    doc.activeElement = ui;
+    doc.dispatchEvent(new Event('focusin'));
+    assert.equal(key('keydown', 'ArrowUp'), true);
+    assert.equal(input.isDown('KeyW'), false);
+    doc.activeElement = null;
+    assert.equal(input.isDown('KeyW'), false);
+  }
+  doc.pointerLockElement = null;
+  assert.equal(key('keydown', 'ArrowRight'), true);
+  assert.equal(input.isDown('KeyD'), false);
+});

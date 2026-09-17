@@ -12,6 +12,7 @@ import { CHALLENGE_LEVEL_CLASSES } from './challengeLevelRegistry.js';
 import { EnvironmentResources } from './EnvironmentResources.js';
 import { VFXManager } from './VFXManager.js';
 import { RunLifecycle } from './RunLifecycle.js';
+import { AudioManager } from '../audio/AudioManager.js';
 import { CHALLENGE_LEVEL_CONFIG } from '../challenges/challengeLevelConfig.js';
 import { updateGoldStars, clearGoldStars } from '../api/GoldStar.js';
 import * as THREE from 'three';
@@ -20,6 +21,7 @@ export class GameEngine {
   constructor(container) {
     this.container = container;
     this.runs = new RunLifecycle();
+    this.audio = new AudioManager();
 
     // Subsystems (initialized in init())
     this.renderer = null;
@@ -219,6 +221,7 @@ export class GameEngine {
 
     this.vfx?.update(dt);
     updateGoldStars(this, dt);
+    for (const coin of this.goldCoins ?? []) coin.updateCoin(dt);
 
     this.renderer.render(this.sceneManager.scene, this.sceneManager.camera);
   }
@@ -261,6 +264,7 @@ export class GameEngine {
 
   /** Clear everything user-created but keep the level */
   clearUserObjects() {
+    this.audio.stopSfx();
     clearGoldStars(this);
     const roots = [...this.userMeshes];
     for (const obj of roots) {
@@ -322,6 +326,7 @@ export class GameEngine {
 
   /** Fully halt simulation, input, and rendering. Last frame stays on screen. */
   stop() {
+    this.audio.stopSfx();
     this.running = false;
     this.userUpdateCallbacks = [];
     this.player?.setEnabled(false);

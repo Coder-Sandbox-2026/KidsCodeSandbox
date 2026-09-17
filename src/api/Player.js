@@ -59,6 +59,7 @@ export class Player extends Actor {
     this.cameraController = new FirstPersonCameraController(camera, {
       eyeHeight: EYE_HEIGHT,
     });
+    this.movementController.onJump = () => this.engine?.audio?.playSfx('jump');
     this._overlapHandles = new Set();
   }
 

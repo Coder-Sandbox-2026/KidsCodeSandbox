@@ -9,8 +9,10 @@ export const GAME_API_DTS = `
 interface ShapeOptions {
   /** Position in the world, like [0, 3, -5] */
   position?: [number, number, number] | number[];
-  /** Size, like [2, 2, 2] or a single number */
+  /** Size in percent: 100 normal, 50 half, 200 double */
   scale?: [number, number, number] | number[] | number;
+  /** Rotation in degrees, e.g. [0, 90, 0]. */
+  rotation?: [number, number, number];
   /** CSS name ("red") or hex ("#ff0000") */
   color?: string;
   /** If true, the object falls and can be pushed */
@@ -66,7 +68,9 @@ interface Actor {
 }
 
 interface GameObject extends Actor {
+  /** Rotation components in degrees. */
   rotation: Vec3;
+  /** Scale components in percent: 100 is normal. */
   scale: Vec3;
   color: string;
   mass: number;
@@ -77,6 +81,7 @@ interface GameObject extends Actor {
   /** True when this object notices touches (even if it does not fall) */
   collisionEnabled: boolean;
   setColor(color: string): GameObject;
+  /** Set scale percentages: 100 normal, 50 half, 200 double. */
   setScale(x: number, y?: number, z?: number): GameObject;
   /** Rotate in degrees */
   rotate(x: number, y: number, z: number): GameObject;
@@ -89,6 +94,12 @@ interface GameObject extends Actor {
   setCollision(opts: { enabled?: boolean } | boolean): GameObject;
   destroy(): void;
   onClick(fn: (event: ClickEvent) => void): GameObject;
+}
+
+interface GoldCoin extends GameObject {
+  /** Spin speed multiplier: 0 stop, 0.5 half, 1 normal, 2 double. */
+  getSpinRate(): number;
+  setSpinRate(rate: number): this;
 }
 
 interface GoldStar extends GameObject {
@@ -135,7 +146,7 @@ declare function createSphere(options?: ShapeOptions): GameObject;
 declare function createCone(options?: ShapeOptions): GameObject;
 declare function createCylinder(options?: ShapeOptions): GameObject;
 declare function createPlane(options?: ShapeOptions): GameObject;
-declare function createGoldCoin(options?: ShapeOptions): GameObject;
+declare function createGoldCoin(options?: ShapeOptions): GoldCoin;
 ${DEBUG_GOLD_STAR_ENABLED ? `/** Development only: a gold star with pulsing glow and glitter. Collision defaults on; physics defaults off. */
 declare function createGoldStar(options?: ShapeOptions): GoldStar;` : ''}
 declare function createCake(options?: ShapeOptions): GameObject;
@@ -154,7 +165,6 @@ interface ExplosionOptions {
  */
 declare function playExplosion(options?: ExplosionOptions | GameObject | Player | [number, number, number]): void;
 /** Same as playExplosion — the VFX module's calling method. */
-declare function playEmberExplosion(options?: ExplosionOptions | GameObject | Player | [number, number, number]): void;
 
 interface TyphoonOptions {
   /** World position, like [0, 0, -8]. Skip this to play on the ground in front of you. */

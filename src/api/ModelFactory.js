@@ -6,6 +6,7 @@ import { placementPosition } from './placementPosition.js';
 import { GameObject } from './GameObject.js';
 import { CAKE_MODEL, GOLD_COIN_MODEL, GOLD_STAR_MODEL } from '../engine/ModelLoader.js';
 import { GoldStar } from './GoldStar.js';
+import { GoldCoin } from './GoldCoin.js';
 
 function applyCommonOptions(root, engine, opts = {}) {
   const p = placementPosition(engine, opts.position);
@@ -18,6 +19,7 @@ function applyCommonOptions(root, engine, opts = {}) {
     else root.scale.set(s, s, s);
   }
   if (opts.name) root.name = opts.name;
+  if (opts.rotation) root.rotation.set(...opts.rotation);
 }
 
 function spawnCollectible(engine, modelId, defaultName, opts = {}, ItemClass = GameObject) {
@@ -64,7 +66,9 @@ export function createModelFactories(engine) {
    * fall or get pushed unless you call enablePhysics().
    */
   function createGoldCoin(opts = {}) {
-    return spawnCollectible(engine, GOLD_COIN_MODEL, 'goldCoin', opts);
+    const position = placementPosition(engine, opts.position);
+    if (opts.position === undefined) position[1] += 0.5;
+    return spawnCollectible(engine, GOLD_COIN_MODEL, 'goldCoin', { ...opts, position }, GoldCoin);
   }
 
   /**

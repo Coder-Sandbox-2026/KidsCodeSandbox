@@ -1,5 +1,8 @@
 import { appSettings } from '../settings/appSettings.js';
 
+const ARROW_MOVEMENT = { KeyW: 'ArrowUp', KeyA: 'ArrowLeft', KeyS: 'ArrowDown', KeyD: 'ArrowRight' };
+const UI_TARGET = 'input, textarea, select, button, [contenteditable], .monaco-editor, dialog, [role=combobox], [role=menu]';
+
 const SIMPLE_TURN_SPEED = Math.PI / 2; // 90 degrees per second.
 
 /**
@@ -21,10 +24,10 @@ export class InputSystem {
     this._jumpQueued = false;
 
     this._onKeyDown = (e) => {
-      if (!this.active) return;
+      if (!this.active || e.target?.closest?.(UI_TARGET)) return;
       if (e.repeat && !this.keys[e.code]) return;
       this.keys[e.code] = true;
-      if (this.controlStyle === 'simple' && e.code.startsWith('Arrow')) e.preventDefault();
+      if (e.code.startsWith('Arrow')) e.preventDefault();
       if (e.code === 'Space') {
         e.preventDefault();
         this._jumpQueued = true;
@@ -46,6 +49,8 @@ export class InputSystem {
     };
 
     this._onCaptureChange = () => this.clear();
+    this._onFocus = () => { if (document.activeElement?.closest?.(UI_TARGET)) this.clear(); };
+    document.addEventListener('focusin', this._onFocus);
     document.addEventListener('pointerlockchange', this._onCaptureChange);
     document.addEventListener('blur', this._onCaptureChange, true);
     document.addEventListener('keydown', this._onKeyDown);
@@ -55,7 +60,8 @@ export class InputSystem {
   }
 
   get active() {
-    return this.enabled && !!document.pointerLockElement;
+    return this.enabled && !!document.pointerLockElement
+      && !document.activeElement?.closest?.(UI_TARGET);
   }
 
   isDown(code) {
@@ -63,7 +69,8 @@ export class InputSystem {
       if (code === 'KeyA' || code === 'KeyD') return false;
       code = ({ KeyW: 'ArrowUp', KeyS: 'ArrowDown' })[code] || code;
     }
-    return this.active && !!this.keys[code];
+    return this.active && (!!this.keys[code]
+      || (this.controlStyle === 'experienced' && !!this.keys[ARROW_MOVEMENT[code]]));
   }
 
   consumeLookDelta(dt = 0) {
@@ -99,6 +106,7 @@ export class InputSystem {
 
   dispose() {
     this._unsubscribe();
+    document.removeEventListener('focusin', this._onFocus);
     document.removeEventListener('pointerlockchange', this._onCaptureChange);
     document.removeEventListener('blur', this._onCaptureChange, true);
     document.removeEventListener('keydown', this._onKeyDown);

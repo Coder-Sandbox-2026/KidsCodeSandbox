@@ -89,7 +89,12 @@ export function registerAutocomplete(monaco, { getPlayerPosition } = {}) {
       const options = optionContext(source, API_DOCS, PLAYER_DOCS);
       if (options) {
         return { incomplete: true, suggestions: options.filter(option => matches(option.name)).map(option => {
-          const value = option.name === 'position' && playerPosition ? playerPosition : option.example;
+          let value = option.name === 'position' && playerPosition ? playerPosition : option.example;
+          if (option.name === 'position' && playerPosition && option.playerYOffset) {
+            const p = JSON.parse(playerPosition);
+            p[1] += option.playerYOffset;
+            value = '[' + p.map(n => n.toFixed(1)).join(', ') + ']';
+          }
           const nameOnly = appSettings.get('codeCoach') === 'off'
             || /^\s*:/.test(lineContent.slice(range.endColumn - 1));
           return {

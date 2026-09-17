@@ -126,6 +126,7 @@ export class FirstPersonMovementController {
     this.grounded = false;
     this._jumpsUsed += 1;
     this._justJumped = true;
+    this.onJump?.();
   }
 
   _collectCharacterContacts() {

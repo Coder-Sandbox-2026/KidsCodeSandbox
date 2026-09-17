@@ -19,7 +19,8 @@ function buildObject(mesh, engine, opts = {}) {
     mesh.position.set(p[0] ?? 0, p[1] ?? 0, p[2] ?? 0);
   }
   // Scale
-  if (opts.scale) {
+  if (opts.rotation) mesh.rotation.set(...opts.rotation);
+  if (opts.scale !== undefined) {
     const s = opts.scale;
     if (Array.isArray(s)) mesh.scale.set(s[0] ?? 1, s[1] ?? 1, s[2] ?? 1);
     else mesh.scale.set(s, s, s);
