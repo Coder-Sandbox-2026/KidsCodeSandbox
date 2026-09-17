@@ -7,6 +7,35 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 
+// This is the final composer pass. Combine in linear space, then apply output
+// conversion once in bloom's existing final draw (no additional fullscreen pass).
+class OutputBloomPass extends UnrealBloomPass {
+  constructor(...args) {
+    super(...args);
+    this.blendMaterial.uniforms.sceneTexture = { value: null };
+    this.blendMaterial.blending = THREE.NoBlending;
+    this.blendMaterial.transparent = false;
+    this.blendMaterial.fragmentShader = `
+      uniform sampler2D sceneTexture;
+      uniform sampler2D tDiffuse;
+      uniform float opacity;
+      varying vec2 vUv;
+      void main() {
+        vec4 sceneColor = texture2D(sceneTexture, vUv);
+        vec3 bloomColor = texture2D(tDiffuse, vUv).rgb;
+        gl_FragColor = vec4(sceneColor.rgb + opacity * bloomColor, sceneColor.a);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }
+    `;
+  }
+
+  render(renderer, writeBuffer, readBuffer, deltaTime, maskActive) {
+    this.blendMaterial.uniforms.sceneTexture.value = readBuffer.texture;
+    super.render(renderer, writeBuffer, readBuffer, deltaTime, maskActive);
+  }
+}
+
 export class Renderer {
   constructor(container) {
     this.container = container;
@@ -16,7 +45,8 @@ export class Renderer {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.toneMapping = THREE.NeutralToneMapping;
     this.renderer.toneMappingExposure = 1.0;
     container.appendChild(this.renderer.domElement);
 
@@ -31,7 +61,7 @@ export class Renderer {
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(scene, camera));
 
-    const bloom = new UnrealBloomPass(
+    const bloom = new OutputBloomPass(
       new THREE.Vector2(width, height),
       0.4,   // strength
       0.4,   // radius

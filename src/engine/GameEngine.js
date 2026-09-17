@@ -8,6 +8,8 @@ import { PhysicsManager } from './PhysicsManager.js';
 import { ModelLoader } from './ModelLoader.js';
 import { Player } from '../api/Player.js';
 import { DefaultLevel } from './DefaultLevel.js';
+import { CHALLENGE_LEVEL_CLASSES } from './challengeLevelRegistry.js';
+import { EnvironmentResources } from './EnvironmentResources.js';
 import { VFXManager } from './VFXManager.js';
 import { RunLifecycle } from './RunLifecycle.js';
 import { updateGoldStars, clearGoldStars } from '../api/GoldStar.js';
@@ -25,6 +27,8 @@ export class GameEngine {
     this.models = null;
     this.player = null;
     this.level = null;
+    this.levelId = 'default';
+    this.environmentResources = new EnvironmentResources();
     this.vfx = null;
 
     // State
@@ -73,7 +77,7 @@ export class GameEngine {
     this.renderer.setupPostProcessing(this.sceneManager.scene, this.sceneManager.camera);
 
     // Default level
-    this.level = new DefaultLevel(this.sceneManager.scene, this.physics);
+    this.level = new DefaultLevel(this.sceneManager.scene, this.physics, this.environmentResources);
 
     // Visual effects (ember explosion, typhoon, …)
     this.vfx = new VFXManager(this);
@@ -231,12 +235,22 @@ export class GameEngine {
     return run;
   }
 
-  /** Load the default playground level */
-  loadLevel() {
+  /** Load the selected environment, retaining shared resources across switches. */
+  loadLevel(levelId = this.levelId) {
+    this._validateLevelId(levelId);
+    if (levelId !== this.levelId) {
+      this.reset(levelId);
+      return;
+    }
     if (this.levelLoaded) return;
     this.level.build();
+    this.sceneManager.applyEnvironment?.(this.level.environment ?? 'day');
     this.levelLoaded = true;
     this.vfx?.retainTyphoonTextures();
+  }
+
+  _validateLevelId(levelId) {
+    if (levelId !== 'default' && !Object.hasOwn(CHALLENGE_LEVEL_CLASSES, levelId)) throw new Error(`Unknown level: ${levelId}`);
   }
 
   /** Clear everything user-created but keep the level */
@@ -265,13 +279,19 @@ export class GameEngine {
   }
 
   /** Full reset – clears user objects, rebuilds level, resets player */
-  reset() {
+  reset(levelId = this.levelId) {
+    this._validateLevelId(levelId);
     this.runs.invalidate();
     this.clearUserObjects();
     this.vfx?.releaseTyphoonTextures();
     this.level.clear();
-    this.physics.reset();
     this.player.dispose();
+    this.physics.reset();
+    if (levelId !== this.levelId) {
+      const Level = levelId === 'default' ? DefaultLevel : CHALLENGE_LEVEL_CLASSES[levelId];
+      this.level = new Level(this.scene, this.physics, this.environmentResources);
+      this.levelId = levelId;
+    }
     this.player = new Player(this.sceneManager.camera, this.physics);
     this.player.engine = this;
     this.levelLoaded = false;
@@ -285,8 +305,9 @@ export class GameEngine {
     this.clearUserObjects();
     this.vfx?.releaseTyphoonTextures();
     this.level.clear();
-    this.physics.reset();
+    this.sceneManager.applyEnvironment?.('day');
     this.player.dispose();
+    this.physics.reset();
     this.player = new Player(this.sceneManager.camera, this.physics);
     this.player.engine = this;
     this.levelLoaded = false;

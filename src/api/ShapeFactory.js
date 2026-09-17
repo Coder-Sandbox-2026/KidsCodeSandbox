@@ -6,6 +6,7 @@ import { resolveColor } from './resolveColor.js';
  */
 import * as THREE from 'three';
 import { GameObject } from './GameObject.js';
+import { createToyBoxGeometry, createToySphereGeometry, createPrimitiveMaterial } from '../engine/primitiveStyle.js';
 
 /**
  * Shared helper to apply common options to a mesh, optionally enable physics,
@@ -80,32 +81,32 @@ function buildObject(mesh, engine, opts = {}) {
 
 export function createShapeFactories(engine) {
   function createCube(opts = {}) {
-    const geo = new THREE.BoxGeometry(1, 1, 1);
-    const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6, metalness: 0.1 });
+    const geo = createToyBoxGeometry(1, 1, 1);
+    const mat = createPrimitiveMaterial();
     return buildObject(new THREE.Mesh(geo, mat), engine, opts);
   }
 
   function createSphere(opts = {}) {
-    const geo = new THREE.SphereGeometry(0.5, 24, 24);
-    const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4, metalness: 0.1 });
+    const geo = createToySphereGeometry(0.5);
+    const mat = createPrimitiveMaterial(0xffffff, 0.38);
     return buildObject(new THREE.Mesh(geo, mat), engine, opts);
   }
 
   function createCone(opts = {}) {
     const geo = new THREE.ConeGeometry(0.5, 1, 24);
-    const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5, metalness: 0.1 });
+    const mat = createPrimitiveMaterial();
     return buildObject(new THREE.Mesh(geo, mat), engine, opts);
   }
 
   function createCylinder(opts = {}) {
     const geo = new THREE.CylinderGeometry(0.5, 0.5, 1, 24);
-    const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5, metalness: 0.1 });
+    const mat = createPrimitiveMaterial();
     return buildObject(new THREE.Mesh(geo, mat), engine, opts);
   }
 
   function createPlane(opts = {}) {
     const geo = new THREE.PlaneGeometry(5, 5);
-    const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8, side: THREE.DoubleSide });
+    const mat = createPrimitiveMaterial(0xffffff, 0.78, { side: THREE.DoubleSide });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.rotation.x = -Math.PI / 2; // lay flat by default
     return buildObject(mesh, engine, opts);

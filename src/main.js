@@ -17,6 +17,7 @@ const AppState = {
   mode: 'create', // 'create' | 'challenge'
   gameType: 'first-person',
   level: 1,
+  challengeLevel: 1,
 
   setMode(mode) {
     this.mode = mode;
@@ -49,6 +50,12 @@ const AppState = {
     btn.textContent = `Level ${level} ▾`;
     document.querySelectorAll('#level-menu button').forEach(b => b.classList.toggle('active', parseInt(b.dataset.level) === level));
   },
+
+  setChallengeLevel(level) {
+    this.challengeLevel = level;
+    document.getElementById('btn-challenge-level').textContent = `Challenge Level ${level} ▾`;
+    document.querySelectorAll('#challenge-level-menu button').forEach(b => b.classList.toggle('active', Number(b.dataset.challengeLevel) === level));
+  },
 };
 
 AppState.setMode('create');
@@ -56,7 +63,7 @@ AppState.setGameType('first-person');
 AppState.setLevel(1);
 
 // ===== Shared Dropdown Helper =====
-const TOOLBAR_DROPDOWN_IDS = ['mode-menu', 'game-type-menu', 'level-menu'];
+const TOOLBAR_DROPDOWN_IDS = ['mode-menu', 'game-type-menu', 'level-menu', 'challenge-level-menu'];
 
 let _openDropdownMenu = null; // tracks which menu is currently open (null = none)
 
@@ -110,6 +117,15 @@ levelBtn.addEventListener('click', (e) => {
   if (!isOpening) _openDropdownMenu = levelMenu;
   else _openDropdownMenu = null;
   levelMenu.classList.toggle('hidden');
+});
+
+const challengeLevelMenu = document.getElementById('challenge-level-menu');
+document.getElementById('btn-challenge-level').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const isOpening = challengeLevelMenu.classList.contains('hidden');
+  closeAllToolbarDropdowns(isOpening ? 'challenge-level-menu' : null);
+  _openDropdownMenu = isOpening ? challengeLevelMenu : null;
+  challengeLevelMenu.classList.toggle('hidden', !isOpening);
 });
 
 // Outside-click: close all open dropdown menus (but not the one being opened by its button)
@@ -194,8 +210,11 @@ const challengeResetBtn = document.getElementById('btn-challenge-reset');
   // ---- Code execution ----
   let currentChallengeRun = null;
   let challengeStar = null;
+  const selectedLevelId = () => AppState.mode === 'challenge' ? `challenge-${AppState.challengeLevel}` : 'default';
   async function runCode() {
     successUI?.cancel();
+    // Select the environment before creating a run: switching invalidates runs.
+    engine.loadLevel(selectedLevelId());
     // Clean up previous run
     const run = engine.beginStudentRun();
     challengeStar = null;
@@ -205,8 +224,6 @@ const challengeResetBtn = document.getElementById('btn-challenge-reset');
     consoleOutput.innerHTML = '';
     editor._clearDecorations();
 
-    // Make sure level is loaded
-    if (!engine.levelLoaded) engine.loadLevel();
     engine.resume();
 
     const code = editor.getCode();
@@ -257,7 +274,7 @@ const challengeResetBtn = document.getElementById('btn-challenge-reset');
     playOverlay.classList.remove('hidden');
     currentChallengeRun = null;
     challengeStar = null;
-    engine.reset();
+    engine.reset(selectedLevelId());
     if (runStudentCode) return runCode();
     api.reset();
     consoleOutput.innerHTML = '';
@@ -277,6 +294,7 @@ const challengeResetBtn = document.getElementById('btn-challenge-reset');
 
   function runAction() {
     successUI.cancel();
+    engine.loadLevel(selectedLevelId());
     if (AppState.mode === 'challenge') {
       stopGame();
       challengeUI.show();
@@ -292,7 +310,22 @@ const challengeResetBtn = document.getElementById('btn-challenge-reset');
       challengeStar = null;
       challengeUI.setComplete(false);
       challengeUI.close();
+      engine.loadLevel(selectedLevelId());
+      api.reset();
     }
+  });
+
+  challengeLevelMenu.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-challenge-level]');
+    if (!button) return;
+    const level = Number(button.dataset.challengeLevel);
+    if (!Number.isInteger(level) || level < 1 || level > 9) return;
+    AppState.setChallengeLevel(level);
+    challengeLevelMenu.classList.add('hidden');
+    _openDropdownMenu = null;
+    resetGame({ runStudentCode: false });
+    stopGame();
+    challengeUI.show();
   });
 
   document.getElementById('btn-stop').addEventListener('click', () => stopGame());
