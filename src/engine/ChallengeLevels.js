@@ -16,7 +16,7 @@ class ChallengeEnvironment extends ChallengeLevel1 {
 
   _begin() {
     if (this.meshes.length) return false;
-    this._box(140, 1, 140, 0, -0.5, 0, 0x52b86c, false);
+    this._checkerBase(140, 1, 140, 0, -0.5, 0, 0x52b86c);
     const grass = this._mesh(this.resources.checkerGrass(0, 0, 140, 140), this.resources.vertexMaterial(this.environment === 'night' ? 'nightGrass' : 'grass'), 0, 0.002, 0);
     grass.name = 'groundCheckerGrass';
     grass.castShadow = false;
@@ -38,10 +38,10 @@ class ChallengeEnvironment extends ChallengeLevel1 {
   _hill(x, z, w, d, height, accessible = false) {
     const rock = this.resources.terrainMaterial('cliffRock');
     this._box(w, height - 0.4, d, x, (height - 0.4) / 2, z, rock.color.getHex());
-    const cap = this._box(w, 0.4, d, x, height - 0.2, z, rock.color.getHex());
+    const cap = this._checkerBase(w, 0.4, d, x, height - 0.2, z, rock.color.getHex());
     cap.name = 'hillGrassCap';
     cap.material = [rock, rock, this.resources.terrainMaterial('grassDark'), rock, rock, rock];
-    const grass = this._mesh(this.resources.checkerGrass(x, z, w - 0.14, d - 0.14), this.resources.vertexMaterial(this.environment === 'night' ? 'nightGrass' : 'grass'), 0, height + 0.002, 0);
+    const grass = this._mesh(this.resources.checkerGrass(x, z, w, d), this.resources.vertexMaterial(this.environment === 'night' ? 'nightGrass' : 'grass'), 0, height + 0.002, 0);
     grass.name = 'hillCheckerGrass';
     grass.castShadow = false;
     this._terrainInstances('hillGrassRim', this.resources.terrainMaterial('grassEdge'), [
@@ -106,10 +106,16 @@ class ChallengeEnvironment extends ChallengeLevel1 {
     this._sceneryDetails(anchors);
     if (this.environment !== 'day') {
       const night = this.environment === 'night';
-      const mesh = this._mesh(this.resources.scenery('celestial'), this.resources.celestialMaterial(night ? 'moon' : 'sun'), night ? -95 : -130, night ? 105 : 70, -150, [night ? 10 : 13, night ? 10 : 13, night ? 10 : 13]);
+      const dawn = this.environment === 'earlyDawn';
+      const mesh = this._mesh(this.resources.scenery('celestial'), this.resources.celestialMaterial(dawn ? 'dawnSun' : night ? 'moon' : 'sun'), dawn ? -170 : night ? -95 : -130, dawn ? 28 : night ? 105 : 70, -150, [night ? 10 : 13, night ? 10 : 13, night ? 10 : 13]);
       mesh.name = night ? 'distantMoon' : 'distantSun';
       mesh.castShadow = false;
       mesh.receiveShadow = false;
+      if (night) {
+        const stars = this.resources.starField();
+        this.scene.add(stars);
+        this.meshes.push(stars);
+      }
     }
   }
 
@@ -119,6 +125,75 @@ class ChallengeEnvironment extends ChallengeLevel1 {
     this.structures = [];
     this.routes = [];
     this.bridges = [];
+  }
+}
+
+// Dawn temples share unit geometry, batched tiers, and simple fixed colliders.
+class DawnTempleEnvironment extends ChallengeEnvironment {
+  environment = 'earlyDawn';
+
+  _pyramid(x, z, width, tierCount, tierHeight, color = 0xe1bd7b) {
+    const tiers = [];
+    const height = tierCount * tierHeight;
+    const topWidth = width - (tierCount - 1) * 5;
+    for (let i = 0; i < tierCount; i++) {
+      const size = width - i * 5;
+      const y = (i + 0.5) * tierHeight;
+      tiers.push([x, y, z, size, tierHeight, size]);
+      this.physicsBodies.push(this.physics.addStaticBox(size / 2, tierHeight / 2, size / 2, x, y, z));
+    }
+    const mesh = this._terrainInstances('steppedPyramid', this.resources.templeMaterial(color), tiers,
+      this.resources.templeTierGeometry());
+    mesh.castShadow = true;
+    // Ramp -> two-unit external landing -> top: adjoining edges, no overlapping tops.
+    const end = z + topWidth / 2 + 2;
+    const start = z + width / 2 + 22;
+    const run = start - end, thickness = 0.3;
+    const angle = Math.atan2(height, run), length = Math.hypot(height, run);
+    const ramp = this._mesh(this.resources.box(1, 1, 1, false), this.resources.material(0xd8bd8e),
+      x, height / 2 - thickness / 2 * Math.cos(angle), (start + end) / 2 - thickness / 2 * Math.sin(angle), [5, thickness, length]);
+    ramp.rotation.x = angle;
+    ramp.name = 'templeAccessRamp';
+    this._fixed(ramp, this.physics.RAPIER.ColliderDesc.cuboid(2.5, thickness / 2, length / 2));
+    const landing = this._mesh(this.resources.box(1, 1, 1, false), this.resources.material(0xd8bd8e),
+      x, height - 0.15, z + topWidth / 2 + 1, [5, 0.3, 2]);
+    landing.name = 'templeLanding';
+    this._fixed(landing, this.physics.RAPIER.ColliderDesc.cuboid(2.5, 0.15, 1));
+    this.routes.push(ramp);
+    this.structures.push({ kind: 'pyramid', mesh, x, z, height, topWidth, rampStart: start, ramp, landing });
+  }
+
+  _floating(x, z, height, colorIndex, width = 6) {
+    const mesh = this._mesh(this.resources.box(1, 1, 1), this.resources.material(COLORS[colorIndex]),
+      x, height, z, [width, 0.6, width]);
+    mesh.name = 'floatingTemplePlatform';
+    const body = this._fixed(mesh, this.physics.RAPIER.ColliderDesc.cuboid(width / 2, 0.3, width / 2));
+    this.structures.push({ kind: 'floatingPlatform', mesh, body, groundHeight: 0 });
+  }
+}
+
+export class ChallengeLevel10 extends DawnTempleEnvironment {
+  build() {
+    if (!this._begin()) return;
+    this._pyramid(-28, -30, 34, 4, 2);
+    this._pyramid(32, 22, 22, 3, 1.5, 0xefdaa2);
+    for (const [x, z, height, color] of [[-48, 18, 13, 1], [15, -40, 17, 0], [45, -15, 21, 3]]) {
+      this._floating(x, z, height, color);
+    }
+    this._finish([[-53, -48], [-52, 43], [52, 42], [51, -47], [12, 48]]);
+  }
+}
+
+export class ChallengeLevel11 extends DawnTempleEnvironment {
+  build() {
+    if (!this._begin()) return;
+    this._pyramid(32, -32, 36, 5, 2, 0xe1bd7b);
+    this._pyramid(-35, -24, 26, 4, 1.8, 0xefdaa2);
+    this._pyramid(-32, 32, 20, 3, 1.6, 0xe1bd7b);
+    for (const [x, z, height, color] of [[5, -45, 14, 0], [50, 18, 19, 1], [24, 42, 24, 3], [-52, 5, 16, 2]]) {
+      this._floating(x, z, height, color);
+    }
+    this._finish([[-55, -50], [53, -53], [52, 45], [-53, 49], [0, 52]]);
   }
 }
 

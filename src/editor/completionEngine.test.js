@@ -6,6 +6,7 @@ import {
   asTokenTemplate,
   buildCompletion,
   completeLine,
+  globalNameMatchRank,
   isInCommentOrString,
   replaceWord,
 } from './completionEngine.js';
@@ -306,6 +307,39 @@ function suggestionsAt(provider, source) {
     getValueInRange: () => before,
   }, { lineNumber, column });
 }
+
+test('global API discovery matches meaningful words and preserves Monaco metadata', () => {
+  const provider = completionProvider();
+  const api = findCompletion('createGoldStar');
+  assert.ok(api, 'authoritative GoldStar API spelling');
+  const original = suggestionsAt(provider, 'createG|').suggestions.find(s => s.label === api.label);
+  for (const query of ['star', 'gold', 'create', 'createG', 'goldstar', 'STAR', 'oldst']) {
+    const found = suggestionsAt(provider, `${query}|`).suggestions.find(s => s.label === api.label);
+    assert.ok(found, query);
+    assert.ok(found.filterText.toLowerCase().startsWith(query.toLowerCase()), query);
+    for (const field of ['kind', 'insertText', 'insertTextRules', 'detail', 'documentation']) {
+      assert.deepEqual(found[field], original[field], field);
+    }
+  }
+  assert.ok(suggestionsAt(provider, 'create|').suggestions.some(s => s.label === 'createCube'));
+  assert.equal(globalNameMatchRank('create_GoldStar', 'create_G'), 0);
+  assert.equal(globalNameMatchRank('create_GoldStar', 'star'), 1);
+  assert.equal(globalNameMatchRank('create_GoldStar', 'goldstar'), 2);
+  assert.equal(globalNameMatchRank('create_GoldStar', 'oldst'), 2);
+  assert.equal(globalNameMatchRank('create_GoldStar', 'xyz'), -1);
+  const gold = suggestionsAt(provider, 'gold|').suggestions.find(s => s.label === api.label);
+  assert.ok(original.sortText < gold.sortText);
+});
+
+test('global word matching stays isolated from properties, members, strings and comments', () => {
+  const provider = completionProvider();
+  for (const source of ['createCube({\n star|\n});', 'player.star|',
+    'const x = "star|";', '// star|']) {
+    assert.deepEqual(suggestionsAt(provider, source).suggestions, [], source);
+  }
+  assert.deepEqual(suggestionsAt(provider, 'createCone({\n po|\n});').suggestions.map(s => s.label), ['position']);
+  assert.deepEqual(suggestionsAt(provider, 'createCone({\n sit|\n});').suggestions, []);
+});
 
 test('Monaco provider refreshes options on object entry and continued typing', () => {
   const provider = completionProvider();

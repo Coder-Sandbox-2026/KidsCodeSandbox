@@ -1,8 +1,8 @@
 import { CHALLENGES } from './challengeCatalog.js';
+import { CHALLENGE_LEVEL_CONFIG } from './challengeLevelConfig.js';
 
-export function mountChallengeUI({ viewport, editor, runCode, onAdvance }) {
-  let index = 0;
-  const current = () => CHALLENGES[index];
+export function mountChallengeUI({ viewport, editor, runCode, onAdvance, getChallengeId }) {
+  const current = () => CHALLENGES.find(challenge => challenge.id === getChallengeId());
   const completion = document.createElement('div');
   completion.className = 'challenge-completion hidden';
   completion.setAttribute('role', 'status');
@@ -80,15 +80,13 @@ export function mountChallengeUI({ viewport, editor, runCode, onAdvance }) {
 
   const ui = {
     get currentChallenge() { return current(); },
-    hasNextChallenge() { return index + 1 < CHALLENGES.length; },
+    hasNextChallenge() { return Object.hasOwn(CHALLENGE_LEVEL_CONFIG, getChallengeId() + 1); },
     async nextChallenge() {
       if (!ui.hasNextChallenge()) return false;
-      index++;
       close();
-      render();
       ui.setComplete(false);
       editor.setCode('');
-      await onAdvance();
+      await onAdvance(getChallengeId() + 1);
       ui.show();
       return true;
     },
@@ -98,6 +96,7 @@ export function mountChallengeUI({ viewport, editor, runCode, onAdvance }) {
       completion.classList.toggle('hidden', !complete && !finished);
     },
     show() {
+      render();
       if (!overlay.classList.contains('hidden')) return;
       previousFocus = document.activeElement;
       setHelpExpanded(false);

@@ -20,6 +20,13 @@ export const CAPSULE_HALF_HEIGHT = PLAYER_HEIGHT / 2 - PLAYER_RADIUS;
 const SPAWN = { x: 0, y: PLAYER_HEIGHT / 2 + 0.5, z: 5 };
 const EYE_HEIGHT = CAPSULE_HALF_HEIGHT + PLAYER_RADIUS - 0.1;
 
+function validateVector(value, label) {
+  if (!Array.isArray(value) || value.length !== 3
+    || ![0, 1, 2].every(i => Number.isFinite(value[i]))) {
+    throw new Error(`${label} must be [x, y, z] with three numbers.`);
+  }
+}
+
 export class Player extends Actor {
   constructor(camera, physics) {
     super({ kind: ACTOR_KIND.PLAYER });
@@ -67,6 +74,39 @@ export class Player extends Actor {
 
   isGrounded() {
     return !!this.movementController.grounded;
+  }
+
+  getPlayerPosition() {
+    const { x, y, z } = this.body.translation();
+    return [x, y, z];
+  }
+
+  setPlayerPosition(value) {
+    validateVector(value, 'Player position');
+    const [x, y, z] = value;
+    const position = { x, y, z };
+    // Synchronize both the current body and its pending kinematic target.
+    this.body.setTranslation(position, true);
+    this.movementController.reset(position);
+    this._overlapHandles.clear();
+    this._position.set(x, y, z);
+    this.cameraController.applyToActor(position);
+  }
+
+  getPlayerDirection() {
+    const yaw = this.cameraController.yaw;
+    return [-Math.sin(yaw), 0, -Math.cos(yaw)];
+  }
+
+  setPlayerDirection(value) {
+    validateVector(value, 'Player direction');
+    const [x, , z] = value;
+    if (x === 0 && z === 0) {
+      throw new Error('Player direction must point somewhere horizontally.');
+    }
+    this.cameraController.yaw = Math.atan2(-x, -z);
+    // The controller preserves pitch and applies its own camera relationship.
+    this.cameraController.applyToActor(this.position);
   }
 
   setWalkSpeed(speed) {

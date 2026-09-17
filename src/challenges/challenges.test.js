@@ -1,8 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { CHALLENGES } from './challengeCatalog.js';
 import { createChallengeValidator } from './challengeValidation.js';
 import { mountChallengeUI } from './ChallengeUI.js';
+import { CHALLENGE_LEVEL_CONFIG } from './challengeLevelConfig.js';
+import { selectChallengeLevel } from './challengeSelection.js';
 
 test('validation rejects wrong concepts, quoted comments, literals and stale runs', () => {
   const check = (id, source, name, value, current = true) => {
@@ -65,14 +68,16 @@ test('current briefing, answer, next/reset/clear, and final catalog boundary', a
   const viewport = new Element();
   let code = '';
   let resets = 0;
+  let selected = 1;
   const ui = mountChallengeUI({
     viewport,
     editor: { getCode: () => code, setCode: value => { code = value; } },
     runCode() {},
-    onAdvance() { assert.equal(code, ''); resets++; },
+    getChallengeId: () => selected,
+    onAdvance(level) { assert.equal(code, ''); selected = level; resets++; },
   });
   const [feedback, overlay] = viewport.children;
-  for (let i = 0; i < CHALLENGES.length; i++) {
+  for (let i = 0; i < 11; i++) {
     assert.equal(ui.currentChallenge, CHALLENGES[i]);
     assert.ok(CHALLENGES[i].title.startsWith('Challenge ' + (i + 1) + ' \u2014 '));
     assert.equal(overlay.querySelector('h2').textContent, CHALLENGES[i].title);
@@ -80,7 +85,7 @@ test('current briefing, answer, next/reset/clear, and final catalog boundary', a
     assert.equal(overlay.querySelector('#challenge-briefing-help').querySelector('p').textContent, CHALLENGES[i].help);
     overlay.querySelector('[data-action="answer"]').click();
     assert.equal(code, CHALLENGES[i].example);
-    assert.equal(ui.hasNextChallenge(), i + 1 < CHALLENGES.length);
+    assert.equal(ui.hasNextChallenge(), i + 1 < 11);
     if (ui.hasNextChallenge()) {
       ui.setComplete(true);
       assert.equal(await ui.nextChallenge(), true);
@@ -91,7 +96,54 @@ test('current briefing, answer, next/reset/clear, and final catalog boundary', a
     }
   }
   assert.equal(await ui.nextChallenge(), false);
-  assert.equal(resets, CHALLENGES.length - 1);
+  assert.equal(resets, 10);
   assert.equal(Object.isFrozen(CHALLENGES), true);
   assert.equal(CHALLENGES.every(Object.isFrozen), true);
+});
+
+test('dropdown jumps and Next share selected stage, objective, UI and reward config', async t => {
+  const saved = globalThis.document;
+  globalThis.document = { createElement: () => new Element(), activeElement: new Element() };
+  t.after(() => { globalThis.document = saved; });
+  let selected = 1, dropdown = 1, stage = 'challenge-1', config;
+  const viewport = new Element();
+  const select = level => selectChallengeLevel(level, {
+    setLevel: id => { selected = dropdown = id; },
+    reset: () => { stage = `challenge-${selected}`; config = CHALLENGE_LEVEL_CONFIG[selected]; },
+    stop() {}, show: () => ui.show(),
+  });
+  const ui = mountChallengeUI({ viewport, editor: { setCode() {} }, runCode() {},
+    getChallengeId: () => selected, onAdvance: select });
+  const verify = id => {
+    assert.equal(selected, id);
+    assert.equal(dropdown, id);
+    assert.equal(stage, `challenge-${id}`);
+    assert.equal(ui.currentChallenge.id, id);
+    assert.equal(viewport.children[1].querySelector('h2').textContent, CHALLENGES[id - 1].title);
+    assert.equal(config, CHALLENGE_LEVEL_CONFIG[id]);
+  };
+  select(3); verify(3);
+  await ui.nextChallenge(); verify(4);
+  select(1); select(8); verify(8);
+  select(9); await ui.nextChallenge(); verify(10);
+  await ui.nextChallenge(); verify(11);
+  assert.equal(ui.hasNextChallenge(), false);
+  assert.equal(select(12), false);
+  assert.deepEqual(CHALLENGE_LEVEL_CONFIG[6].goldStar, { position: [-0.4, 8.3, -37.6], scale: 0.6 });
+  assert.deepEqual(CHALLENGE_LEVEL_CONFIG[7].goldStar, { position: [35, 2, 42.7], scale: 0.2 });
+  assert.deepEqual(CHALLENGE_LEVEL_CONFIG[8].playerPosition, [30.973, 17.950, 24.599]);
+  assert.deepEqual(CHALLENGE_LEVEL_CONFIG[8].playerDirection, [-0.999, 0, 0.050]);
+  assert.equal(Object.keys(CHALLENGE_LEVEL_CONFIG).length, 11);
+  assert.deepEqual(CHALLENGE_LEVEL_CONFIG[10].playerPosition, [44.661, 22.250, -15.425]);
+  assert.deepEqual(CHALLENGE_LEVEL_CONFIG[10].playerDirection, [0.078, 0, 0.997]);
+  assert.deepEqual(CHALLENGE_LEVEL_CONFIG[10].goldStar, { position: [-28, 12, -31.1], scale: 1.0 });
+  assert.deepEqual(CHALLENGE_LEVEL_CONFIG[11].playerPosition, [24.627, 0.950, 40.763]);
+  assert.deepEqual(CHALLENGE_LEVEL_CONFIG[11].playerDirection, [0.042, 0, -0.999]);
+  assert.deepEqual(CHALLENGE_LEVEL_CONFIG[11].goldStar, { position: [23.5, 28, 42.3], scale: 0.9 });
+  for (const id of [10, 11]) assert.equal('temporaryInspection' in CHALLENGE_LEVEL_CONFIG[id], false);
+  assert.deepEqual(CHALLENGE_LEVEL_CONFIG[1].playerPosition, [-22.520, 2.700, -18.584]);
+  assert.deepEqual(CHALLENGE_LEVEL_CONFIG[1].playerDirection, [-0.589, 0, 0.808]);
+  assert.deepEqual(CHALLENGE_LEVEL_CONFIG[1].goldStar, { position: [23.7, 6, -20.4], scale: 0.2 });
+  const html = await readFile(new URL('../../index.html', import.meta.url), 'utf8');
+  for (const id of [10, 11]) assert.ok(html.includes(`data-challenge-level="${id}"`));
 });

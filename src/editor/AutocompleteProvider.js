@@ -13,7 +13,7 @@ import {
   PLAYER_DOCS,
   findHoverEntry,
 } from './apiCompletions.js';
-import { buildCompletion, completionSourceContext, wordRangeFromMonaco, optionContext, currentPositionText, withCurrentPosition } from './completionEngine.js';
+import { buildCompletion, completionSourceContext, wordRangeFromMonaco, optionContext, currentPositionText, withCurrentPosition, globalNameMatchRank } from './completionEngine.js';
 import { buildHover } from './hoverDocs.js';
 
 /** Keep Monaco's document words out of authoritative API property lists. */
@@ -126,8 +126,16 @@ export function registerAutocomplete(monaco, { getPlayerPosition } = {}) {
       // The next typed word may belong to an options object. Ask Monaco to
       // refresh this provider instead of only filtering cached global names.
       if (!prefix || !/(?:^|[;{}(=,!?:]|\breturn|\bawait|=>)\s*$/.test(beforeWord)) return { suggestions: [] };
-      return { incomplete: true, suggestions: API_DOCS.filter(item => matches(item.label))
-        .map(item => toSuggestion(item, range, monaco, lineContent, playerPosition)) };
+      return { incomplete: true, suggestions: API_DOCS.flatMap(item => {
+        const rank = globalNameMatchRank(item.label, prefix);
+        if (rank < 0) return [];
+        const suggestion = toSuggestion(item, range, monaco, lineContent, playerPosition);
+        return [{ ...suggestion,
+          sortText: '0' + rank + item.label,
+          // Monaco also filters results; anchor discovered words to the typed query.
+          filterText: rank === 0 ? item.label : prefix + ' ' + item.label,
+        }];
+      }) };
     },
   });
 

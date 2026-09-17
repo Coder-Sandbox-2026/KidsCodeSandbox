@@ -284,6 +284,10 @@ export class GameAPI {
         if (player) report('getPlayer');
         return player;
       },
+      getPlayerPosition: () => engine.getPlayer().getPlayerPosition(),
+      setPlayerPosition: (position) => engine.getPlayer().setPlayerPosition(position),
+      getPlayerDirection: () => engine.getPlayer().getPlayerDirection(),
+      setPlayerDirection: (direction) => engine.getPlayer().setPlayerDirection(direction),
 
       isKeyDown: (key) => !!engine.player?.input.active && self._keysDown.has(key),
       onKeyDown: (key, fn) => {

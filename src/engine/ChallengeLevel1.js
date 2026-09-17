@@ -35,6 +35,13 @@ export class ChallengeLevel1 {
     return mesh;
   }
 
+  /** Checker grass supplies the visible top; retain box sides and collision. */
+  _checkerBase(w, h, d, x, y, z, color) {
+    const mesh = this._box(w, h, d, x, y, z, color, false);
+    mesh.geometry = this.resources.boxWithoutTop(w, h, d);
+    return mesh;
+  }
+
   _terrainInstances(name, material, placements, geometry = this.resources.box(1, 1, 1, false)) {
     const mesh = new THREE.InstancedMesh(geometry, material, placements.length);
     const transform = new THREE.Object3D();
@@ -70,7 +77,7 @@ export class ChallengeLevel1 {
       [14.99, 1.4, -25, 0.04, 2.1, 4],
     ], this.resources.scenery('rock'));
 
-    const grass = this._mesh(this.resources.checkerGrass(24, -23, 17.86, 13.86), this.resources.vertexMaterial(), 0, 4.002, 0);
+    const grass = this._mesh(this.resources.checkerGrass(24, -23, 18, 14), this.resources.vertexMaterial(), 0, 4.002, 0);
     grass.name = 'cliffCheckerGrass';
     grass.castShadow = false;
   }
@@ -87,7 +94,10 @@ export class ChallengeLevel1 {
     // Four clouds, five shared rounded lobes each, batched into one draw.
     const lobes = [];
     const cloudCenters = [[-55, 35, -100, 1.1], [0, 30, -125, 0.8], [75, 40, -100, 1.3], [-95, 38, 35, 1]];
-    for (const [x, y, z, size] of this.environment === 'night' ? cloudCenters.slice(0, 2) : cloudCenters) {
+    const centers = this.environment === 'earlyDawn'
+      ? [...cloudCenters, [105, 32, 65, 0.9]]
+      : this.environment === 'night' ? cloudCenters.slice(0, 2) : cloudCenters;
+    for (const [x, y, z, size] of centers) {
       const angle = Math.atan2(x, z);
       for (const [dx, dy, w, h] of [[-6, 0, 5, 3], [-2, 1, 5, 4], [1, 4, 5.5, 6], [5, 0.5, 5, 3.5], [0, -1, 8, 2.5]]) {
         lobes.push([x + dx * size * Math.cos(angle), y + dy * size, z - dx * size * Math.sin(angle), w * size, h * size, 3 * size, angle]);
@@ -95,11 +105,12 @@ export class ChallengeLevel1 {
     }
     const clouds = this._terrainInstances('distantClouds', this.resources.cloudMaterial(this.environment), lobes, this.resources.scenery('cloud'));
     clouds.receiveShadow = false;
+    clouds.userData.cloudCount = centers.length;
   }
 
   build() {
     if (this.meshes.length) return;
-    this._box(SIZE, 1, SIZE, 0, -0.5, 0, COLORS.grass, false);
+    this._checkerBase(SIZE, 1, SIZE, 0, -0.5, 0, COLORS.grass);
     const grass = this._mesh(this.resources.checkerGrass(0, 0, SIZE, SIZE), this.resources.vertexMaterial(), 0, 0.002, 0);
     grass.name = 'groundCheckerGrass';
     grass.castShadow = false;
@@ -111,7 +122,7 @@ export class ChallengeLevel1 {
 
     // A modest northeast bluff with a grassy cap. The center/spawn stays open.
     this._box(18, 3.6, 14, 24, 1.8, -23, COLORS.cliff);
-    const cap = this._box(18, 0.4, 14, 24, 3.8, -23, COLORS.cliff);
+    const cap = this._checkerBase(18, 0.4, 14, 24, 3.8, -23, COLORS.cliff);
     this._terrainDetails(cap);
     // Broad 0.25-high steps are below the player's existing autostep limit.
     // Each touches the next, giving a walkable route up to the 4-high grass top.

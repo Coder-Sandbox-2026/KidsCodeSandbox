@@ -44,6 +44,18 @@ export function textAfterWord(line, wordEndColumn) {
   return line.slice(wordEndColumn - 1);
 }
 
+/** Rank global names only: full prefix, word prefix, then substring. */
+export function globalNameMatchRank(name, query) {
+  const lower = name.toLowerCase();
+  const needle = query.toLowerCase();
+  if (lower.startsWith(needle)) return 0;
+  const words = name.replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z])([A-Z][a-z])/g, '$1 $2').toLowerCase().split(/[_\s]+/);
+  if (words.some(word => word.startsWith(needle))) return 1;
+  if (lower.includes(needle) || words.join('').includes(needle)) return 2;
+  return -1;
+}
+
 export function isInCommentOrString(line, column) {
   const before = line.slice(0, Math.max(0, column - 1));
   let inSingle = false;

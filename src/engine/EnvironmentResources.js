@@ -72,6 +72,25 @@ export class EnvironmentResources {
     return this.geometries.get(key);
   }
 
+  boxWithoutTop(w, h, d) {
+    const key = `openTop:${w}:${h}:${d}`;
+    if (!this.geometries.has(key)) {
+      const geometry = this.box(w, h, d, false).clone();
+      const indices = [], groups = [...geometry.groups];
+      geometry.clearGroups();
+      for (const group of groups) {
+        const start = indices.length;
+        if (group.materialIndex !== 2) {
+          indices.push(...Array.from(geometry.index.array).slice(group.start, group.start + group.count));
+        }
+        geometry.addGroup(start, indices.length - start, group.materialIndex);
+      }
+      geometry.setIndex(indices);
+      this.geometries.set(key, geometry);
+    }
+    return this.geometries.get(key);
+  }
+
   scenery(kind) {
     if (!this.geometries.has(kind)) {
       let geometry;
@@ -144,7 +163,7 @@ export class EnvironmentResources {
       // Lit diffuse clouds retain their baked white/blue shading. A small fill
       // keeps undersides readable without the former unlit white bloom peaks.
       this.materials.set(key, new THREE.MeshLambertMaterial({
-        color: environment === 'night' ? 0x9aadc9 : environment.startsWith('sunset') ? 0xffefdb : 0xe9f2fa,
+        color: environment === 'earlyDawn' ? 0xfff2e5 : environment === 'night' ? 0x9aadc9 : environment.startsWith('sunset') ? 0xffefdb : 0xe9f2fa,
         vertexColors: true, emissive: 0xc4d9ed, emissiveIntensity: environment === 'night' ? 0.08 : 0.45,
       }));
     }
@@ -154,9 +173,80 @@ export class EnvironmentResources {
   celestialMaterial(kind) {
     const key = `celestial:${kind}`;
     if (!this.materials.has(key)) {
-      this.materials.set(key, new THREE.MeshBasicMaterial({ color: kind === 'moon' ? 0xadbed6 : 0xf5b64d }));
+      const color = new THREE.Color(kind === 'dawnSun' ? 0xffd9a3 : kind === 'moon' ? 0xd4e2ff : 0xffc477);
+      color.multiplyScalar(kind === 'moon' ? 1.25 : 2.3);
+      this.materials.set(key, new THREE.MeshBasicMaterial({ color, toneMapped: false }));
     }
     return this.materials.get(key);
+  }
+
+  templeTierGeometry() {
+    const key = 'templeTier';
+    if (!this.geometries.has(key)) {
+      const positions = [], colors = [];
+      // Exposed walls, a narrow stone trim band, and a light flat top.
+      // Omit undersides: upper tiers must not duplicate lower-tier top planes.
+      for (let face = 0; face < 4; face++) {
+        const angle = face * Math.PI / 2;
+        for (const [bottom, top, tint] of [[-0.5, 0.34, 0xc6c6bb],
+          [0.34, 0.42, 0xe4e9cc], [0.42, 0.5, 0xc6c6bb]]) {
+          const points = [[-0.5, bottom, 0.5], [0.5, bottom, 0.5],
+            [0.5, top, 0.5], [-0.5, top, 0.5]].map(([x, y, z]) =>
+            [x * Math.cos(angle) + z * Math.sin(angle), y, z * Math.cos(angle) - x * Math.sin(angle)]);
+          polygon(positions, colors, points, new THREE.Color(tint));
+        }
+      }
+      polygon(positions, colors, [[-0.5, 0.5, -0.5], [-0.5, 0.5, 0.5],
+        [0.5, 0.5, 0.5], [0.5, 0.5, -0.5]], new THREE.Color(0xfff4df));
+      this.geometries.set(key, coloredGeometry(positions, colors));
+    }
+    return this.geometries.get(key);
+  }
+
+  templeMaterial(color) {
+    const key = `temple:${color}`;
+    if (!this.materials.has(key)) {
+      this.materials.set(key, createPrimitiveMaterial(color, 0.85, { vertexColors: true }));
+    }
+    return this.materials.get(key);
+  }
+
+  starField() {
+    const key = 'nightStars';
+    if (!this.geometries.has(key)) {
+      const positions = [], colors = [], sizes = [];
+      let seed = 917;
+      const random = () => {
+        seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+        return seed / 4294967296;
+      };
+      for (let i = 0; i < 220; i++) {
+        const angle = random() * Math.PI * 2;
+        const height = 0.3 + random() * 0.68;
+        const radius = Math.sqrt(1 - height * height) * 450;
+        positions.push(Math.cos(angle) * radius, height * 450, Math.sin(angle) * radius);
+        const brightness = 0.55 + random() * 0.4;
+        colors.push(brightness * 0.85, brightness * 0.92, brightness);
+        sizes.push(0.7 + random() * 0.6);
+      }
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+      geometry.setAttribute('starSize', new THREE.Float32BufferAttribute(sizes, 1));
+      this.geometries.set(key, geometry);
+      const material = new THREE.PointsMaterial({ size: 3, sizeAttenuation: false,
+        vertexColors: true, toneMapped: false, depthWrite: false, fog: false });
+      material.onBeforeCompile = shader => {
+        shader.vertexShader = 'attribute float starSize;\n' + shader.vertexShader;
+        shader.vertexShader = shader.vertexShader.replace('gl_PointSize = size;', 'gl_PointSize = size * starSize;');
+        shader.fragmentShader = shader.fragmentShader.replace('void main() {',
+          'void main() {\n if (length(gl_PointCoord - vec2(0.5)) > 0.5) discard;');
+      };
+      this.materials.set(key, material);
+    }
+    const stars = new THREE.Points(this.geometries.get(key), this.materials.get(key));
+    stars.name = 'distantStars';
+    return stars;
   }
 
   checkerGrass(x, z, w, d) {
@@ -169,27 +259,38 @@ export class EnvironmentResources {
           const x0 = Math.max(left, ix * TILE_SIZE), x1 = Math.min(right, (ix + 1) * TILE_SIZE);
           const z0 = Math.max(back, iz * TILE_SIZE), z1 = Math.min(front, (iz + 1) * TILE_SIZE);
           const color = new THREE.Color(CHECKER_COLORS[(ix + iz) & 1]);
-          polygon(positions, colors, [[x0, 0, z0], [x0, 0, z1], [x1, 0, z1], [x1, 0, z0]], color);
           // Stable world-cell hashing: motifs stay aligned across heights/resets.
           const hash = Math.imul(ix + 91, 374761393) ^ Math.imul(iz + 117, 668265263);
           const seed = (hash >>> 0) / 4294967296;
-          if (seed > 0.45) continue;
           const cx = (ix + 0.3 + seed * 0.7) * TILE_SIZE;
           const cz = (iz + 0.65 - seed * 0.5) * TILE_SIZE;
           const radius = seed < 0.08 ? 0.55 : 0.28;
-          if (cx - radius * 2 < left || cx + radius * 2 > right || cz - radius * 2 < back || cz + radius * 2 > front) continue;
           const tint = color.clone().multiplyScalar(seed < 0.22 ? 1.12 : 0.88);
           const petals = seed < 0.22 ? 5 : 3;
-          for (let petal = 0; petal < petals; petal++) {
-            const angle = petal * Math.PI * 2 / petals + seed * 6;
-            const px = cx + Math.cos(angle) * radius, pz = cz + Math.sin(angle) * radius;
-            const points = Array.from({ length: 6 }, (_, i) => {
-              const a = i * Math.PI / 3;
-              const u = Math.cos(a) * radius, v = Math.sin(a) * radius * 0.55;
-              return [px + u * Math.cos(angle) - v * Math.sin(angle), 0.003, pz + u * Math.sin(angle) + v * Math.cos(angle)];
-            }).reverse();
-            polygon(positions, colors, points, tint);
+          const contour = [[x0, -z1], [x1, -z1], [x1, -z0], [x0, -z0]].map(p => new THREE.Vector2(...p));
+          const motif = [];
+          if (seed <= 0.45 && cx - radius * 2 > x0 && cx + radius * 2 < x1
+            && cz - radius * 2 > z0 && cz + radius * 2 < z1) {
+            // Two outline vertices per petal keep the triangulated tile + motif
+            // at the same triangle budget as the former six-sided petal overlays.
+            for (let i = 0; i < petals * 2; i++) {
+              const angle = i * Math.PI * 2 / (petals * 2);
+              const r = radius * (1.25 + 0.55 * Math.cos(petals * angle));
+              motif.push(new THREE.Vector2(cx + Math.cos(angle + seed * 6) * r,
+                -cz + Math.sin(angle + seed * 6) * r));
+            }
           }
+          // Cut the motif out of its tile, then fill it at the same height.
+          // The colored regions meet at edges; no overlay competes for depth.
+          const emit = (vertices, triangles, shade) => {
+            for (const triangle of triangles) for (const index of triangle) {
+              const point = vertices[index];
+              positions.push(point.x, 0, -point.y);
+              colors.push(shade.r, shade.g, shade.b);
+            }
+          };
+          emit([...contour, ...motif], THREE.ShapeUtils.triangulateShape(contour, motif.length ? [motif] : []), color);
+          if (motif.length) emit(motif, THREE.ShapeUtils.triangulateShape(motif, []), tint);
         }
       }
       this.geometries.set(key, coloredGeometry(positions, colors));

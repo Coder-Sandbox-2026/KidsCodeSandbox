@@ -1,4 +1,6 @@
 import { createChallengeValidator } from './challenges/challengeValidation.js';
+import { CHALLENGE_LEVEL_CONFIG } from './challenges/challengeLevelConfig.js';
+import { selectChallengeLevel } from './challenges/challengeSelection.js';
 /**
  * main.js – Application entry point. Wires together the editor, engine,
  * API, and UI controls.
@@ -234,9 +236,8 @@ const challengeResetBtn = document.getElementById('btn-challenge-reset');
       isCurrent: validChallenge,
       onComplete: () => {
         challengeUI.setComplete(true);
-        const p = engine.getPlayer().position;
         try {
-          challengeStar = api.models.createGoldStar({ position: [p.x + 2, p.y, p.z - 3] });
+          challengeStar = api.models.createGoldStar(CHALLENGE_LEVEL_CONFIG[AppState.challengeLevel].goldStar);
         } catch (error) {
           logToConsole('Could not place the challenge Gold Star: ' + error.message, 'error');
         }
@@ -265,7 +266,8 @@ const challengeResetBtn = document.getElementById('btn-challenge-reset');
     viewport: document.getElementById('viewport-pane'),
     editor,
     runCode,
-    onAdvance: () => resetGame({ runStudentCode: false }),
+    getChallengeId: () => AppState.challengeLevel,
+    onAdvance: selectChallenge,
   });
   function resetGame({ runStudentCode = true } = {}) {
     successUI?.cancel();
@@ -319,14 +321,20 @@ const challengeResetBtn = document.getElementById('btn-challenge-reset');
     const button = event.target.closest('[data-challenge-level]');
     if (!button) return;
     const level = Number(button.dataset.challengeLevel);
-    if (!Number.isInteger(level) || level < 1 || level > 9) return;
-    AppState.setChallengeLevel(level);
+    if (!Number.isInteger(level) || !Object.hasOwn(CHALLENGE_LEVEL_CONFIG, level)) return;
     challengeLevelMenu.classList.add('hidden');
     _openDropdownMenu = null;
-    resetGame({ runStudentCode: false });
-    stopGame();
-    challengeUI.show();
+    selectChallenge(level);
   });
+
+  function selectChallenge(level) {
+    return selectChallengeLevel(level, {
+      setLevel: level => AppState.setChallengeLevel(level),
+      reset: () => resetGame({ runStudentCode: false }),
+      stop: stopGame,
+      show: () => challengeUI.show(),
+    });
+  }
 
   document.getElementById('btn-stop').addEventListener('click', () => stopGame());
   document.getElementById('btn-reset').addEventListener('click', resetGame);

@@ -12,6 +12,7 @@ import { CHALLENGE_LEVEL_CLASSES } from './challengeLevelRegistry.js';
 import { EnvironmentResources } from './EnvironmentResources.js';
 import { VFXManager } from './VFXManager.js';
 import { RunLifecycle } from './RunLifecycle.js';
+import { CHALLENGE_LEVEL_CONFIG } from '../challenges/challengeLevelConfig.js';
 import { updateGoldStars, clearGoldStars } from '../api/GoldStar.js';
 import * as THREE from 'three';
 
@@ -245,6 +246,11 @@ export class GameEngine {
     if (this.levelLoaded) return;
     this.level.build();
     this.sceneManager.applyEnvironment?.(this.level.environment ?? 'day');
+    const config = CHALLENGE_LEVEL_CONFIG[this.levelId.replace('challenge-', '')];
+    if (config) {
+      this.player.setPlayerPosition(config.playerPosition);
+      this.player.setPlayerDirection(config.playerDirection);
+    }
     this.levelLoaded = true;
     this.vfx?.retainTyphoonTextures();
   }

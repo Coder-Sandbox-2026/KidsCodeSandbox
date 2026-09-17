@@ -95,6 +95,26 @@ export const PLAYER_SETTING_OPTIONS = [
 
 /** Global API completions */
 export const API_DOCS = [
+  {
+    label: 'getPlayerPosition', kind: 'Function', detail: 'Get where you are',
+    doc: 'getPlayerPosition()\n\nReturns your player body position as a fresh [x, y, z] array.\n\nExample:\nprint(getPlayerPosition());',
+    completion: call('getPlayerPosition', 'getPlayerPosition()'),
+  },
+  {
+    label: 'setPlayerPosition', kind: 'Function', detail: 'Move yourself to a position',
+    doc: 'setPlayerPosition([x, y, z])\n\nTeleports your player body and stops its movement. Your view follows at eye height. Use three finite numbers.\n\nExample:\nsetPlayerPosition([0, 5, -10]);',
+    completion: call('setPlayerPosition', 'setPlayerPosition([${1:0}, ${2:5}, ${3:-10}])'),
+  },
+  {
+    label: 'getPlayerDirection', kind: 'Function', detail: 'Get which way you face',
+    doc: 'getPlayerDirection()\n\nReturns a fresh horizontal [x, 0, z] direction with length 1. Looking up or down does not change it. Forward starts along -Z.\n\nExample:\nprint(getPlayerDirection());',
+    completion: call('getPlayerDirection', 'getPlayerDirection()'),
+  },
+  {
+    label: 'setPlayerDirection', kind: 'Function', detail: 'Choose which way you face',
+    doc: 'setPlayerDirection([x, y, z])\n\nFaces you horizontally in this direction, keeping how far you look up or down. Y is ignored; X and Z cannot both be zero. Use three finite numbers.\n\nExample:\nsetPlayerDirection([1, 0, 0]);',
+    completion: call('setPlayerDirection', 'setPlayerDirection([${1:1}, ${2:0}, ${3:0}])'),
+  },
   // Placement API uses the same gate as the runtime scope and Monaco declarations.
   ...(DEBUG_GOLD_STAR_ENABLED ? [{
     label: 'createGoldStar',

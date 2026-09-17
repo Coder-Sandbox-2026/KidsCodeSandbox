@@ -185,6 +185,10 @@ declare function distance(a: GameObject | Vec3, b: GameObject | Vec3): number;
 declare function destroy(object: GameObject): void;
 declare function findObject(name: string): GameObject | null;
 declare function getPlayer(): Player;
+declare function getPlayerPosition(): [number, number, number];
+declare function setPlayerPosition(position: [number, number, number]): void;
+declare function getPlayerDirection(): [number, number, number];
+declare function setPlayerDirection(direction: [number, number, number]): void;
 
 declare function isKeyDown(key: string): boolean;
 declare function onKeyDown(key: string, callback: () => void): void;

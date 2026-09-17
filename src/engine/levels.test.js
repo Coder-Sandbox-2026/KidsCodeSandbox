@@ -8,6 +8,7 @@ import { ChallengeLevel1 } from './ChallengeLevel1.js';
 import { Player } from '../api/Player.js';
 import { SceneManager } from './SceneManager.js';
 import { CHALLENGE_LEVEL_CLASSES } from './challengeLevelRegistry.js';
+import { CHALLENGE_LEVEL_CONFIG } from '../challenges/challengeLevelConfig.js';
 
 // Match the existing engine tests: replace Vite asset URLs only, not gameplay.
 const hook = registerHooks({
@@ -83,7 +84,7 @@ test('challenge environment is open, contained, static, and has a walkable cliff
     assert.equal(surface.geometry.attributes.color.count, positions.count);
     assert.ok(Array.from(surface.geometry.attributes.normal.array).filter((_, i) => i % 3 === 1).every(y => y > 0.99));
     const heights = new Set(Array.from(positions.array).filter((_, i) => i % 3 === 1));
-    assert.equal(heights.size, 2); // Checker + sparse raised motifs in one batch.
+    assert.equal(heights.size, 1); // Checker and embedded motifs share one tessellated surface.
     assert.equal(surface.castShadow, false);
   }
   assert.equal(level.meshes.find(m => m.name === 'grassTufts').count, 16);
@@ -148,6 +149,19 @@ test('levels 1–9 map correctly, remain open/static, and reuse resources across
       engine.loadLevel(key);
       assert.ok(engine.level instanceof CHALLENGE_LEVEL_CLASSES[key]);
       assert.equal(engine.level.constructor.name, `ChallengeLevel${id}`);
+      const config = CHALLENGE_LEVEL_CONFIG[id];
+      engine.player.getPlayerPosition().forEach((value, i) => assert.ok(Math.abs(value - config.playerPosition[i]) < 0.00001));
+      const expectedDirection = new THREE.Vector3(...config.playerDirection).normalize();
+      engine.player.getPlayerDirection().forEach((value, i) => assert.ok(Math.abs(value - expectedDirection.toArray()[i]) < 1e-12));
+      // Capsule extends 0.9 below its center: supplied starts leave about 0.05 clearance.
+      engine.physics.world.step();
+      let embedded = false;
+      engine.physics.world.intersectionsWithShape(engine.player.body.translation(), engine.player.body.rotation(),
+        engine.player.collider.shape, collider => {
+          if (collider.handle !== engine.player.collider.handle && !collider.isSensor()) embedded = true;
+          return true;
+        });
+      assert.equal(embedded, false, `challenge-${id} start intersects terrain`);
       if (oldMeshes.length && oldMeshes[0] !== engine.level.meshes[0]) assert.ok(oldMeshes.every(m => m.parent === null));
       const ground = engine.level.meshes[0];
       assert.equal(ground.geometry.parameters.width, 140);
@@ -160,6 +174,21 @@ test('levels 1–9 map correctly, remain open/static, and reuse resources across
       assert.equal(engine.sceneManager.environment, expectedEnvironment);
       const celestial = engine.level.meshes.filter(m => m.name === 'distantSun' || m.name === 'distantMoon');
       assert.equal(celestial.length, id <= 3 ? 0 : 1);
+      for (const mesh of celestial) {
+        assert.equal(mesh.material.toneMapped, false);
+        const color = mesh.material.color;
+        assert.ok(color.r * 0.299 + color.g * 0.587 + color.b * 0.114 > 0.85);
+      }
+      const stars = engine.level.meshes.filter(m => m.name === 'distantStars');
+      assert.equal(stars.length, id >= 7 ? 1 : 0);
+      assert.equal(engine.scene.children.filter(m => m.name === 'distantStars').length, stars.length);
+      if (stars.length) {
+        const shared = engine.environmentResources.starField();
+        assert.equal(stars[0].geometry, shared.geometry);
+        assert.equal(stars[0].material, shared.material);
+        assert.equal(stars[0].isPoints, true);
+        assert.equal(stars[0].geometry.attributes.position.count, 220);
+      }
       if (id > 1) {
         assert.ok(engine.level.structures.every(s => s.body.isFixed()));
         assert.ok(engine.level.hills.every(h => h.height > 0));
@@ -245,7 +274,7 @@ test('time presets reuse one readable shadow light and restore day settings', t 
   t.after(() => { if (oldWindow === undefined) delete globalThis.window; else globalThis.window = oldWindow; });
   const manager = new SceneManager({ aspect: 1 });
   const day = { background: manager.scene.background.getHex(), sun: manager.sun.color.getHex(), intensity: manager.sun.intensity, position: manager.sun.position.toArray() };
-  for (const preset of ['sunset', 'sunsetStrong', 'night', 'day']) {
+  for (const preset of ['sunset', 'sunsetStrong', 'night', 'earlyDawn', 'day']) {
     manager.applyEnvironment(preset);
     assert.equal(manager.scene.children.filter(o => o.isLight && o.castShadow).length, 1);
     assert.equal(manager.sun.shadow.mapSize.x, 2048);
@@ -258,6 +287,68 @@ test('time presets reuse one readable shadow light and restore day settings', t 
     }
   }
   assert.deepEqual({ background: manager.scene.background.getHex(), sun: manager.sun.color.getHex(), intensity: manager.sun.intensity, position: manager.sun.position.toArray() }, day);
+});
+
+test('dawn stages build five shared clouds, climbable temples and high fixed platforms', async t => {
+  const engine = await fixture(t);
+  let cloudGeometry, cloudMaterial;
+  engine.loadLevel('challenge-9');
+  for (const id of [10, 11, 10]) {
+    const previous = [...engine.level.meshes];
+    engine.loadLevel(`challenge-${id}`);
+    assert.ok(previous.every(mesh => mesh.parent === null));
+    assert.equal(engine.level.constructor.name, `ChallengeLevel${id}`);
+    assert.equal(engine.sceneManager.environment, 'earlyDawn');
+    assert.equal(engine.scene.children.some(mesh => ['distantStars', 'distantMoon'].includes(mesh.name)), false);
+    assert.equal(engine.level.meshes.filter(mesh => mesh.name === 'distantSun').length, 1);
+    const clouds = engine.level.meshes.find(mesh => mesh.name === 'distantClouds');
+    assert.equal(clouds.userData.cloudCount, 5);
+    assert.equal(clouds.count, 25);
+    cloudGeometry ??= clouds.geometry;
+    cloudMaterial ??= clouds.material;
+    assert.equal(clouds.geometry, cloudGeometry);
+    assert.equal(clouds.material, cloudMaterial);
+    const pyramids = engine.level.structures.filter(s => s.kind === 'pyramid');
+    assert.equal(pyramids.length, id === 10 ? 2 : 3);
+    const platforms = engine.level.structures.filter(s => s.kind === 'floatingPlatform');
+    assert.equal(platforms.length, id === 10 ? 3 : 4);
+    for (const platform of platforms) {
+      assert.ok(platform.mesh.position.y - 0.3 - platform.groundHeight >= 12);
+      assert.ok(platform.body.isFixed());
+    }
+    // Walk every ramp onto its flat upper surface using the actual controller.
+    for (const pyramid of pyramids) {
+      const { landing, ramp, mesh } = pyramid;
+      const topFront = pyramid.z + pyramid.topWidth / 2;
+      assert.ok(Math.abs(landing.position.z - landing.scale.z / 2 - topFront) < 1e-12,
+        'landing must terminate at the top edge instead of overlapping it');
+      const rampEnd = ramp.localToWorld(new THREE.Vector3(0, 0.5, -0.5));
+      assert.ok(Math.abs(rampEnd.z - landing.position.z - landing.scale.z / 2) < 1e-10);
+      assert.ok(Math.abs(rampEnd.y - pyramid.height) < 1e-10);
+      assert.equal(mesh.geometry, engine.environmentResources.templeTierGeometry());
+      assert.equal(mesh.material.vertexColors, true);
+      assert.equal(landing.material, ramp.material);
+      const normals = mesh.geometry.attributes.normal;
+      for (let i = 0; i < normals.count; i++) {
+        assert.ok(normals.getY(i) >= 0, 'hidden coplanar undersides must be omitted');
+      }
+      engine.player.setPlayerPosition([pyramid.x, 0.95, pyramid.rampStart + 1]);
+      const input = { isDown: key => key === 'KeyW', consumeJump: () => false };
+      for (let frame = 0; frame < 900; frame++) {
+        engine.player.movementController.update(1 / 60, input, 0);
+        engine.physics.step(1 / 60);
+        if (engine.player.position.z <= pyramid.z) break;
+      }
+      assert.ok(engine.player.position.z <= pyramid.z, `Level ${id} temple ramp blocked`);
+      assert.ok(Math.abs(engine.player.position.y - pyramid.height - 0.95) < 0.15,
+        `Level ${id} temple top y=${engine.player.position.y}`);
+    }
+    engine.reset();
+    assert.equal(engine.scene.children.filter(mesh => mesh.name === 'distantClouds').length, 1);
+  }
+  engine.loadLevel('challenge-1');
+  assert.equal(engine.sceneManager.environment, 'day');
+  assert.equal(engine.level.meshes.find(mesh => mesh.name === 'distantClouds').userData.cloudCount, 4);
 });
 
 test('switch/reset/clear retains shared resources and cleans meshes, bodies, and runs', async t => {
@@ -277,7 +368,8 @@ test('switch/reset/clear retains shared resources and cleans meshes, bodies, and
   assert.equal(privateDisposals, 2);
   assert.equal(sharedDisposals, 0);
   assert.equal(ground.parent, null);
-  assert.equal(engine.level.meshes[0].geometry, ground.geometry);
+  const challengeGroundGeometry = engine.level.meshes[0].geometry;
+  assert.equal(challengeGroundGeometry, engine.environmentResources.boxWithoutTop(140, 1, 140));
   assert.equal(engine.level.meshes[0].material, ground.material);
   const meshCount = engine.scene.children.length;
   const bodyCount = engine.physics.world.bodies.len();
@@ -285,6 +377,7 @@ test('switch/reset/clear retains shared resources and cleans meshes, bodies, and
   for (let i = 0; i < 3; i++) {
     engine.reset();
     assert.equal(engine.levelId, 'challenge-1');
+    assert.equal(engine.level.meshes[0].geometry, challengeGroundGeometry);
     assert.equal(engine.scene.children.length, meshCount);
     assert.equal(engine.physics.world.bodies.len(), bodyCount);
     assert.deepEqual([engine.environmentResources.geometries.size, engine.environmentResources.materials.size], cacheCounts);
@@ -309,4 +402,43 @@ test('switch/reset/clear retains shared resources and cleans meshes, bodies, and
   assert.equal(sharedDisposals, 2); // Released only at permanent teardown.
   assert.equal(engine.environmentResources.geometries.size, 0);
   assert.equal(engine.environmentResources.materials.size, 0);
+});
+
+test('all eleven challenge stages have one tessellated checker surface without covered box tops', async t => {
+  const engine = await fixture(t);
+  for (let id = 1; id <= 11; id++) {
+    engine.loadLevel(`challenge-${id}`);
+    const ground = engine.level.meshes[0];
+    for (const mesh of [ground, ...engine.level.meshes.filter(m => /^(?:cliff|hill)GrassCap$/.test(m.name))]) {
+      for (const index of mesh.geometry.index.array) {
+        assert.ok(mesh.geometry.attributes.normal.getY(index) < 0.99, 'covered box top must not render');
+      }
+    }
+    const surfaces = engine.level.meshes.filter(mesh => mesh.name.endsWith('CheckerGrass'));
+    assert.equal(surfaces.filter(mesh => mesh.name === 'groundCheckerGrass').length, 1);
+    for (const surface of surfaces) {
+      const positions = surface.geometry.attributes.position;
+      let area = 0;
+      const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+      for (let i = 0; i < positions.count; i += 3) {
+        a.fromBufferAttribute(positions, i);
+        b.fromBufferAttribute(positions, i + 1);
+        c.fromBufferAttribute(positions, i + 2);
+        assert.equal(a.y, 0);
+        area += b.sub(a).cross(c.sub(a)).length() / 2;
+      }
+      surface.geometry.computeBoundingBox();
+      const size = surface.geometry.boundingBox.getSize(new THREE.Vector3());
+      assert.ok(Math.abs(area - size.x * size.z) < 0.01,
+        'motifs must replace grass triangles, retaining full coverage without extra overdraw');
+      if (surface.name === 'groundCheckerGrass') {
+        assert.ok(new Set(surface.geometry.attributes.color.array).size > 6, 'retain checker colors and motif tints');
+      }
+    }
+    if (id >= 10) {
+      engine.player.getPlayerPosition().forEach((value, i) => {
+        assert.ok(Math.abs(value - CHALLENGE_LEVEL_CONFIG[id].playerPosition[i]) < 0.00001);
+      });
+    }
+  }
 });
