@@ -13,8 +13,32 @@ import {
   PLAYER_DOCS,
   findHoverEntry,
 } from './apiCompletions.js';
-import { buildCompletion, isInCommentOrString, wordRangeFromMonaco, optionContext, currentPositionText, withCurrentPosition } from './completionEngine.js';
+import { buildCompletion, completionSourceContext, wordRangeFromMonaco, optionContext, currentPositionText, withCurrentPosition } from './completionEngine.js';
 import { buildHover } from './hoverDocs.js';
+
+/** Keep Monaco's document words out of authoritative API property lists. */
+export function bindOptionSuggestionScope(editor) {
+  const normal = editor.getRawOptions().wordBasedSuggestions ?? 'currentDocument';
+  let exclusive = false;
+  const update = () => {
+    const model = editor.getModel();
+    const position = editor.getPosition();
+    const source = model && position ? model.getValueInRange({
+      startLineNumber: 1, startColumn: 1,
+      endLineNumber: position.lineNumber, endColumn: position.column,
+    }) : null;
+    // An empty list still identifies the property context: never use word fallback.
+    const next = source != null && optionContext(source, API_DOCS, PLAYER_DOCS) !== null;
+    if (next !== exclusive) {
+      exclusive = next;
+      editor.updateOptions({ wordBasedSuggestions: exclusive ? 'off' : normal });
+    }
+  };
+  const listeners = [editor.onDidChangeCursorPosition(update),
+    editor.onDidChangeModelContent(update), editor.onDidChangeModel(update)];
+  editor.onDidDispose(() => listeners.forEach(listener => listener.dispose()));
+  update();
+}
 
 export function registerAutocomplete(monaco, { getPlayerPosition } = {}) {
   const kindMap = {
@@ -46,21 +70,25 @@ export function registerAutocomplete(monaco, { getPlayerPosition } = {}) {
   }
 
   monaco.languages.registerCompletionItemProvider('javascript', {
-    triggerCharacters: ['.'],
+    triggerCharacters: ['.', '{'],
     provideCompletionItems(model, position) {
       const range = wordRangeFromMonaco(model, position);
       const lineContent = model.getLineContent(position.lineNumber);
-      if (isInCommentOrString(lineContent, position.column)) {
-        return { suggestions: [] };
-      }
-
-      const playerPosition = currentPositionText(getPlayerPosition);
-      const options = optionContext(model.getValueInRange({
+      const source = model.getValueInRange({
         startLineNumber: 1, startColumn: 1,
         endLineNumber: position.lineNumber, endColumn: position.column,
-      }), API_DOCS, PLAYER_DOCS);
+      });
+      const context = completionSourceContext(source);
+      if (!context) {
+        return { suggestions: [] };
+      }
+      const prefix = lineContent.slice(range.startColumn - 1, position.column - 1);
+      const matches = name => name.startsWith(prefix);
+
+      const playerPosition = currentPositionText(getPlayerPosition);
+      const options = optionContext(source, API_DOCS, PLAYER_DOCS);
       if (options) {
-        return { suggestions: options.map(option => {
+        return { incomplete: true, suggestions: options.filter(option => matches(option.name)).map(option => {
           const value = option.name === 'position' && playerPosition ? playerPosition : option.example;
           const nameOnly = appSettings.get('codeCoach') === 'off'
             || /^\s*:/.test(lineContent.slice(range.endColumn - 1));
@@ -71,18 +99,35 @@ export function registerAutocomplete(monaco, { getPlayerPosition } = {}) {
               : monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
             detail: option.type, documentation: option.description,
             sortText: '0' + option.name,
+            filterText: option.name,
           };
         }) };
       }
-      const charBefore = lineContent[range.startColumn - 2];
-      if (charBefore === '.') {
-        const beforeDot = lineContent.slice(0, range.startColumn - 2);
-        const owner = (beforeDot.match(/(\w+)$/) || [])[1];
-        const docs = owner === 'console' ? CONSOLE_DOCS : owner === 'player' ? PLAYER_DOCS : MEMBER_DOCS;
-        return { suggestions: docs.map(item => toSuggestion(item, range, monaco, lineContent, playerPosition)) };
+      const beforeWord = context.masked.slice(0, source.length - prefix.length);
+      // Objects and arrays contain keys/values, not global API identifiers.
+      const inValue = context.stack.some(({ ch, index }) => ch === '['
+        || (ch === '{' && !/(?:\)|=>|\belse|\btry|\bfinally)\s*$/.test(context.masked.slice(0, index))));
+      if (inValue) return { suggestions: [] };
+      if (/\.\s*$/.test(beforeWord)) {
+        const owner = beforeWord.match(/(?:^|[^\w$.])([A-Za-z_$][\w$]*)\s*\.\s*$/)?.[1];
+        let docs = owner === 'console' ? CONSOLE_DOCS : owner === 'player' ? PLAYER_DOCS : null;
+        if (owner && !docs) {
+          // Infer only directly assigned API results; unknown receivers belong to Monaco.
+          const assignments = [...context.masked.matchAll(/\b(?:const|let|var)\s+([\w$]+)\s*=\s*([\w$]+)\s*\(/g)];
+          const factory = assignments.filter(match => match[1] === owner).at(-1)?.[2];
+          const entry = API_DOCS.find(item => item.label === factory);
+          if (entry?.label === 'getPlayer') docs = PLAYER_DOCS;
+          else if (entry && (entry.label.startsWith('create') || entry.label === 'findObject')) docs = MEMBER_DOCS;
+        }
+        return { incomplete: true, suggestions: (docs || []).filter(item => matches(item.label))
+          .map(item => toSuggestion(item, range, monaco, lineContent, playerPosition)) };
       }
 
-      return { suggestions: API_DOCS.map(item => toSuggestion(item, range, monaco, lineContent, playerPosition)) };
+      // The next typed word may belong to an options object. Ask Monaco to
+      // refresh this provider instead of only filtering cached global names.
+      if (!prefix || !/(?:^|[;{}(=,!?:]|\breturn|\bawait|=>)\s*$/.test(beforeWord)) return { suggestions: [] };
+      return { incomplete: true, suggestions: API_DOCS.filter(item => matches(item.label))
+        .map(item => toSuggestion(item, range, monaco, lineContent, playerPosition)) };
     },
   });
 

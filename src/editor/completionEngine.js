@@ -213,14 +213,15 @@ export function withCurrentPosition(text, position) {
   return position ? text.replace(/(\bposition\s*:\s*)\[[^\]\n]*\]/g, (_, prefix) => prefix + position) : text;
 }
 
-/** Conservative first-argument options context. Strings/comments retain offsets. */
-export function optionContext(source, globals, playerMethods) {
+/** Lightweight lexical context shared by custom completions. */
+export function completionSourceContext(source) {
   let masked = '';
   for (let i = 0; i < source.length;) {
     const rest = source.slice(i);
     const token = rest.match(/^(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\/\*[^]*?\*\/|\/\/[^\n]*(?:\n|$))/);
     if (token) {
-      masked += ' '.repeat(token[0].length);
+      if (token[0].startsWith('//') && !token[0].endsWith('\n')) return null;
+      masked += token[0].replace(/[^\n]/g, ' ');
       i += token[0].length;
     } else {
       // Templates, regex literals and unfinished strings are intentionally skipped.
@@ -237,6 +238,14 @@ export function optionContext(source, globals, playerMethods) {
       stack.pop();
     }
   }
+  return { masked, stack };
+}
+
+/** Conservative first-argument options context. Strings/comments retain offsets. */
+export function optionContext(source, globals, playerMethods) {
+  const context = completionSourceContext(source);
+  if (!context) return null;
+  const { masked, stack } = context;
   const object = stack.at(-1);
   if (object?.ch !== '{') return null;
   const before = masked.slice(0, object.index);

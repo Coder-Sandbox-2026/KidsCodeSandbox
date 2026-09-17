@@ -5,7 +5,7 @@
 import './monacoEnv.js';
 import * as monaco from 'monaco-editor';
 import { typescript as monacoTypescript } from 'monaco-editor';
-import { registerAutocomplete } from './AutocompleteProvider.js';
+import { registerAutocomplete, bindOptionSuggestionScope } from './AutocompleteProvider.js';
 import { GAME_API_DTS } from './gameApiTypes.js';
 import { bindHoverDisclosureLayout } from './hoverLayout.js';
 
@@ -138,6 +138,7 @@ export class EditorManager {
         localityBonus: true,
       },
     });
+    bindOptionSuggestionScope(this.editor);
     bindHoverDisclosureLayout(this.editor);
   }
 

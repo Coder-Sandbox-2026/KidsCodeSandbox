@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { API_DOCS, MEMBER_DOCS, PLAYER_DOCS, findCompletion } from './apiCompletions.js';
+import { registerAutocomplete, bindOptionSuggestionScope } from './AutocompleteProvider.js';
 import {
   asTokenTemplate,
   buildCompletion,
@@ -278,4 +279,160 @@ test('placement templates omit position but position remains a valid option', ()
     }
     assert.ok(optionContext(item.label + '({ pos', API_DOCS, PLAYER_DOCS).some(p => p.name === 'position'));
   }
+});
+
+function completionProvider() {
+  let provider;
+  registerAutocomplete({ languages: {
+    CompletionItemKind: { Function: 1, Method: 2, Property: 3 },
+    CompletionItemInsertTextRule: { InsertAsSnippet: 4 },
+    registerCompletionItemProvider(_language, registered) { provider = registered; },
+    registerHoverProvider() {},
+  } });
+  return provider;
+}
+
+// The marker represents the cursor, including when the closing braces exist.
+function suggestionsAt(provider, source) {
+  const offset = source.indexOf('|');
+  const before = source.slice(0, offset);
+  const lines = source.replace('|', '').split('\n');
+  const lineNumber = before.split('\n').length;
+  const column = before.split('\n').at(-1).length + 1;
+  const word = before.match(/[\w$]*$/)[0];
+  return provider.provideCompletionItems({
+    getWordUntilPosition: () => ({ startColumn: column - word.length, endColumn: column }),
+    getLineContent: number => lines[number - 1],
+    getValueInRange: () => before,
+  }, { lineNumber, column });
+}
+
+test('Monaco provider refreshes options on object entry and continued typing', () => {
+  const provider = completionProvider();
+  assert.ok(provider.triggerCharacters.includes('{'));
+  assert.equal(suggestionsAt(provider, 'create|').incomplete, true);
+  for (const api of ['createCube', 'createSphere', 'createCone', 'createCylinder', 'createPlane', 'createCake', 'createGoldCoin']) {
+    for (const prefix of ['', 'p', 'po']) {
+      const result = suggestionsAt(provider, `${api}({\n    ${prefix}|\n});`);
+      assert.equal(result.incomplete, true);
+      const matching = result.suggestions.filter(item => item.filterText.startsWith(prefix));
+      assert.equal(matching.length, result.suggestions.length);
+      assert.ok(matching.some(item => item.label === 'position'), `${api}: ${prefix}`);
+      if (prefix !== 'po') assert.ok(matching.some(item => item.label === 'physics'));
+      const position = matching.find(item => item.label === 'position');
+      assert.equal(position.range.startColumn, 5);
+      assert.equal(position.range.endColumn, 5 + prefix.length);
+      assert.match(position.insertText, /^position(?:$|:)/);
+    }
+  }
+  for (const [source, expected] of [
+    ['createSphere({\n color: "green",\n phy|\n});', 'physics'],
+    ['createCylinder({\n color: "red",\n ph|\n});', 'physics'],
+    ['createSphere({ po| });', 'position'],
+    ['createCone({\n color: "green",\n physics: true,\n p|\n});', 'position'],
+  ]) {
+    const items = suggestionsAt(provider, source).suggestions;
+    assert.ok(items.some(item => item.label === expected), source);
+    if (source.includes('color:')) assert.ok(!items.some(item => item.label === 'color'));
+    if (source.includes('physics: true')) assert.ok(!items.some(item => item.label === 'physics'));
+  }
+});
+
+test('commas do not trigger API suggestions but subsequent property typing does', () => {
+  const provider = completionProvider();
+  // Monaco requests character-triggered completion only for registered triggers.
+  assert.ok(!provider.triggerCharacters.includes(','));
+  assert.ok(!provider.triggerCharacters.includes('\n'));
+  assert.ok(!provider.triggerCharacters.includes(' '));
+  for (const prefix of ['p', 'po']) {
+    const result = suggestionsAt(provider, `createCone({\n    color: "green",\n    ${prefix}|\n});`);
+    const matching = result.suggestions.filter(item => item.filterText.startsWith(prefix));
+    assert.ok(matching.some(item => item.label === 'position'));
+    if (prefix === 'p') assert.ok(matching.some(item => item.label === 'physics'));
+    assert.ok(!result.suggestions.some(item => item.label === 'color'));
+  }
+});
+
+test('Monaco option completions preserve value and ordinary JavaScript contexts', () => {
+  const provider = completionProvider();
+  for (const source of ['const obj = { p| };', 'unknown({ p| });', 'createCone({ physics: p| });']) {
+    const items = suggestionsAt(provider, source).suggestions;
+    assert.ok(!items.some(item => item.label === 'physics' || item.label === 'position'), source);
+    assert.deepEqual(items, []);
+  }
+  assert.deepEqual(suggestionsAt(provider, 'createCone({ color: "gr|" });').suggestions, []);
+  assert.deepEqual(suggestionsAt(provider, 'foo.|').suggestions, []);
+  assert.ok(suggestionsAt(provider, 'const foo = createCube({});\nfoo.|').suggestions.some(item => item.label === 'position'));
+  const existingColon = suggestionsAt(provider, 'createCone({ po|: [0, 1, 2] });').suggestions;
+  assert.equal(existingColon.find(item => item.label === 'position').insertText, 'position');
+});
+
+test('custom suggestions require a supported context and matching metadata', () => {
+  const provider = completionProvider();
+  for (const source of ['.|', ',|', 'crea.|', 'createCone({ xyz| });',
+    'const x = { crea| };', 'const s = "crea|";', '// crea|',
+    '/* comment\ncrea|\n*/', 'const s = `text\ncrea|`;',
+    'createCone({ color: crea| });', 'createCone({ position: [1, crea|, 3] });',
+    'createCone({ nested: { crea| } });', 'const list = [crea|];']) {
+    assert.deepEqual(suggestionsAt(provider, source).suggestions, [], source);
+  }
+  assert.deepEqual(suggestionsAt(provider, 'createCone({ p| });').suggestions.map(item => item.label), ['position', 'physics']);
+  assert.deepEqual(suggestionsAt(provider, 'createCone({ po| });').suggestions.map(item => item.label), ['position']);
+  assert.deepEqual(suggestionsAt(provider, 'createCone({ color: "red", po| });').suggestions.map(item => item.label), ['position']);
+  assert.deepEqual(suggestionsAt(provider, 'createCone({ position: [1, 2, 3], p| });').suggestions.map(item => item.label), ['physics']);
+  const globals = suggestionsAt(provider, 'const cube = crea|').suggestions;
+  assert.ok(globals.some(item => item.label === 'createCone'));
+  assert.ok(globals.every(item => item.label.startsWith('crea')));
+  const members = suggestionsAt(provider, 'player.|').suggestions;
+  assert.ok(members.some(item => item.label === 'setWalkSpeed'));
+  assert.ok(!members.some(item => item.label === 'createCone'));
+  assert.ok(suggestionsAt(provider, 'player.setW|').suggestions.every(item => item.label.startsWith('setW')));
+});
+
+test('used options never fall back to global suggestions and keep Property kinds', () => {
+  const provider = completionProvider();
+  for (const api of ['createCube', 'createSphere', 'createCone', 'createCylinder', 'createPlane']) {
+    assert.deepEqual(suggestionsAt(provider, `${api}({\n position: [0, 3, -5],\n color: "red",\n physics: true,\n p|\n});`).suggestions, []);
+  }
+  for (const [body, expected] of [
+    ['color: "red",\n po', 'position'], ['position: [0, 3, -5],\n po', null],
+    ['phy', 'physics'], ['physics: true,\n phy', null],
+  ]) {
+    const items = suggestionsAt(provider, `createCube({\n ${body}|\n});`).suggestions;
+    assert.deepEqual(items.map(item => item.label), expected ? [expected] : []);
+    for (const item of items) assert.equal(item.kind, 3); // Property, not Text
+  }
+});
+
+test('document-word suggestions are disabled only in API option-property context', () => {
+  let source = 'createCube({\n position: [0, 3, -5],\n color: "red",\n physics: true,\n p';
+  const events = {};
+  const changes = [];
+  const subscribe = name => callback => {
+    events[name] = callback;
+    return { dispose() {} };
+  };
+  bindOptionSuggestionScope({
+    getRawOptions: () => ({ wordBasedSuggestions: 'currentDocument' }),
+    getModel: () => ({ getValueInRange: () => source }),
+    getPosition: () => ({ lineNumber: 5, column: 3 }),
+    updateOptions: options => changes.push(options.wordBasedSuggestions),
+    onDidChangeCursorPosition: subscribe('cursor'),
+    onDidChangeModelContent: subscribe('content'),
+    onDidChangeModel: subscribe('model'),
+    onDidDispose: subscribe('dispose'),
+  });
+  assert.deepEqual(changes, ['off']);
+  source = 'createCube({ color: "red", po';
+  events.content();
+  assert.deepEqual(changes, ['off']);
+  for (const outside of ['createCube({ color: "', 'createCube({ position: [1, ', 'print', 'const obj = { p']) {
+    source = outside;
+    events.cursor();
+    assert.equal(changes.at(-1), 'currentDocument');
+    source = 'createCube({ phy';
+    events.model();
+    assert.equal(changes.at(-1), 'off');
+  }
+  events.dispose();
 });
