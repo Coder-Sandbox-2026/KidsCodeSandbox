@@ -253,7 +253,7 @@ import { optionContext, currentPositionText, withCurrentPosition } from './compl
 test('option suggestions use the called API and omit used fields and unsafe contexts', () => {
   const options = source => optionContext(source, API_DOCS, PLAYER_DOCS);
   assert.ok(options('createCube({\n ma').some(p => p.name === 'mass'));
-  assert.ok(!options('playTyphoon({ ma').some(p => p.name === 'mass'));
+  assert.equal(options('playTyphoon({ ma'), null, 'hidden APIs have no custom option suggestions');
   assert.ok(!options('createCube({ mass: 1, ma').some(p => p.name === 'mass'));
   assert.ok(options('createCube({ position: [0, 3, -5], co').some(p => p.name === 'color'));
   assert.ok(options('player.setSettings({ wa').some(p => p.name === 'walkSpeed'));

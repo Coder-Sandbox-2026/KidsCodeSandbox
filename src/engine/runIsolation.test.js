@@ -358,8 +358,9 @@ test('current VFX and toolbar VFX still attach to the scene', async t => {
     playEmberExplosion: build, createTyphoon: build,
   });
   const { run, scope } = h.begin();
-  assert.equal(scope.playTyphoon(), undefined, 'public VFX return contract stays void');
-  const effect = await h.engine.vfx.playEmberExplosion({}, run);
+  assert.equal(scope.playTyphoon, undefined, 'Typhoon is hidden from student code');
+  assert.equal(scope.playExplosion(), undefined, 'public VFX return contract stays void');
+  const effect = await h.engine.vfx.createTyphoon({}, run);
   const toolbar = await h.engine.vfx.playEmberExplosion();
   assert.equal(effect.object3D.parent, h.engine.scene);
   assert.equal(toolbar.object3D.parent, h.engine.scene);
