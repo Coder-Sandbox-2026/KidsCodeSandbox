@@ -24,6 +24,7 @@ export class FirstPersonMovementController {
 
     this.velocity = new THREE.Vector3();
     this.horizVelocity = new THREE.Vector3();
+    this.knockbackVelocity = new THREE.Vector3();
     this.grounded = false;
     this._jumpsUsed = 0;
     this._justJumped = false;
@@ -73,7 +74,8 @@ export class FirstPersonMovementController {
     const t = rate >= 1 ? 1 : Math.max(0, rate);
     this.horizVelocity.lerp(targetHoriz, t);
 
-    const move = this.horizVelocity.clone().multiplyScalar(dt);
+    const move = this.horizVelocity.clone().add(this.knockbackVelocity).multiplyScalar(dt);
+    this.knockbackVelocity.multiplyScalar(Math.exp(-4 * dt));
 
     this.velocity.y += -settings.gravity * dt;
     if (this.velocity.y < -settings.maxFallSpeed) {
@@ -115,6 +117,12 @@ export class FirstPersonMovementController {
     }
 
     return newPos;
+  }
+
+  addKnockback(velocity) {
+    this.knockbackVelocity.x += velocity.x;
+    this.knockbackVelocity.z += velocity.z;
+    this.velocity.y += velocity.y;
   }
 
   _tryJump(settings) {
@@ -209,6 +217,7 @@ export class FirstPersonMovementController {
     this.body.setNextKinematicTranslation(spawn);
     this.velocity.set(0, 0, 0);
     this.horizVelocity.set(0, 0, 0);
+    this.knockbackVelocity.set(0, 0, 0);
     this.grounded = false;
     this._jumpsUsed = 0;
     this._justJumped = false;

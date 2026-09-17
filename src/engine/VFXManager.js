@@ -1,3 +1,4 @@
+import { applyExplosionBlast } from './explosionBlast.js';
 /**
  * VFXManager.js – Owns live visual effects, ticks them in the engine loop,
  * and wraps bundled VFX so kid code can call playExplosion() / playTyphoon().
@@ -123,8 +124,9 @@ export class VFXManager {
     this.engine.audio?.playSfx('charging');
     let explosionPlayed = false;
     effect.on('explode', () => {
-      if (explosionPlayed || (run && !run.active)) return;
+      if (explosionPlayed || !this._effects.has(effect) || (run && !run.active)) return;
       explosionPlayed = true;
+      applyExplosionBlast(this.engine, effect.object3D.getWorldPosition(new THREE.Vector3()), explosionRadius);
       this.engine.audio?.playSfx('explosion');
     });
     effect.on('finished', () => {

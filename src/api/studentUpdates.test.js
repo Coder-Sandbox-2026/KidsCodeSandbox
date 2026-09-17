@@ -84,6 +84,14 @@ test('student transform units and coin lifecycle use real API and physics', asyn
   movement.grounded = false; movement._tryJump(engine.player.getSettings()); assert.equal(sounds.length, 1);
   movement.grounded = true; movement._tryJump(engine.player.getSettings()); assert.equal(sounds.at(-1), 'jump');
   movement._tryJump(engine.player.getSettings()); assert.equal(sounds.length, 2);
+  assert.equal('playTyphoon' in scope, false);
+  assert.equal(typeof scope.playExplosion, 'function');
+  assert.equal(typeof VFXManager.prototype.createTyphoon, 'function');
+  let typhoonError;
+  await run.execute('playTyphoon();', scope, { error: cause => { typhoonError = cause; } });
+  assert.ok(typhoonError instanceof ReferenceError);
+  assert.equal(API_DOCS.some(item => item.label === 'playTyphoon'), false);
+  assert.equal(GAME_API_DTS.includes('Typhoon'), false);
   assert.equal('playEmberExplosion' in scope, false);
   let error;
   await run.execute('playEmberExplosion();', scope, { error: cause => { error = cause; } });
@@ -109,18 +117,82 @@ test('music is looping, idempotent across Run/Reset calls, and stopped by Stop',
 });
 
 test('explosion start plays charging immediately and later events do not replay it', async () => {
-  const events = new Map(), sounds = [];
+  const events = new Map(), sounds = [], impulses = [];
   const effect = { object3D: new THREE.Group(), config: {}, dispose() {},
     on(name, callback) { events.set(name, callback); } };
-  const vfx = new VFXManager({ scene: new THREE.Scene(), audio: { playSfx: name => sounds.push(name) } }, {
-    loadVfxTextures: async () => ({}), playEmberExplosion: async () => effect,
+  const vfx = new VFXManager({ scene: new THREE.Scene(), audio: { playSfx: name => sounds.push(name) },
+    physics: { bodies: new Map([[1, { body: { isDynamic: () => true, translation: () => ({ x: 1, y: 0, z: 0 }), mass: () => 1, applyImpulse: impulse => impulses.push(impulse) } }]]) } }, {
+    loadVfxTextures: async () => ({}), playEmberExplosion: async () => ({ ...effect, object3D: new THREE.Group() }),
   });
   await vfx.playEmberExplosion({ position: [0, 0, 0] });
   assert.deepEqual(sounds, ['charging']);
+  assert.equal(impulses.length, 0);
   for (let i = 0; i < 2; i++) {
     events.get('phase')({ phase: EMBER_EXPLOSION_PHASES.CHARGING });
+    assert.equal(impulses.length, i === 0 ? 0 : 1);
     events.get('explode')();
   }
   assert.deepEqual(sounds, ['charging', 'explosion']);
+  assert.equal(impulses.length, 1);
+  assert.ok(impulses[0].x > 0);
+  const firstExplode = events.get('explode');
   vfx.clear();
+  firstExplode(); assert.equal(impulses.length, 1);
+  await vfx.playEmberExplosion({ position: [0, 0, 0], radius: 5 });
+  events.get('explode')(); events.get('explode')();
+  assert.equal(impulses.length, 2);
+  assert.ok(Math.abs(impulses[1].x - 40 * (1 - 1 / 5)) < 1e-8);
+  await vfx.playEmberExplosion({ position: [0, 0, 0] });
+  const disposedExplode = events.get('explode');
+  vfx.clear(); disposedExplode();
+  assert.equal(impulses.length, 2);
+});
+
+
+test('spherical blast uses real Rapier bodies, falloff, sleeping wakeup and upright player momentum', async t => {
+  const { applyExplosionBlast } = await import('../engine/explosionBlast.js');
+  const saved = globalThis.document;
+  globalThis.document = new EventTarget();
+  const physics = new PhysicsManager();
+  await physics.init();
+  const camera = new THREE.PerspectiveCamera();
+  const player = new Player(camera, physics);
+  t.after(() => {
+    player.dispose(); physics.world.free(); physics._eventQueue.free();
+    globalThis.document = saved;
+  });
+  const bodies = [[1, 0, 0], [4, 0, 0], [6, 0, 0], [0, 0, 0], [0, -2, 0], [1, 1, 1]].map(position => {
+    const mesh = new THREE.Object3D(); mesh.position.fromArray(position);
+    const { body } = physics.addDynamic(mesh, physics.RAPIER.ColliderDesc.ball(.1));
+    body.recomputeMassPropertiesFromColliders(); return body;
+  });
+  const fixed = physics.addStaticBox(1, 0, 0, 1, 1, 1);
+  physics.bodies.set('fixed-test', { body: fixed }); // Body capability is authoritative.
+  const visual = new THREE.Object3D();
+  const beforeCount = physics.bodies.size;
+  player.setPlayerPosition([2, 0, 0]);
+  const orientation = camera.quaternion.clone(), rotation = player.body.rotation();
+  bodies[0].sleep();
+  applyExplosionBlast({ physics, player }, new THREE.Vector3(), 5);
+  assert.equal(bodies[0].isSleeping(), false);
+  assert.ok(bodies[0].linvel().x > bodies[1].linvel().x);
+  assert.equal(bodies[2].linvel().x, 0);
+  assert.ok(bodies[4].linvel().y < 0);
+  assert.ok(bodies[5].linvel().x > 0 && bodies[5].linvel().y > 0 && bodies[5].linvel().z > 0);
+  assert.ok(Object.values(bodies[3].linvel()).every(Number.isFinite));
+  assert.ok(bodies[3].linvel().y > 0);
+  assert.equal(fixed.translation().x, 1);
+  assert.equal(physics.bodies.size, beforeCount);
+  assert.equal(visual.userData.gameObject, undefined);
+  const movement = player.movementController;
+  const initialKick = movement.knockbackVelocity.x;
+  assert.ok(initialKick > 0);
+  movement.update(1 / 60, { isDown: () => false, consumeJump: () => false }, 0);
+  assert.ok(movement.knockbackVelocity.x > 0 && movement.knockbackVelocity.x < initialKick);
+  assert.deepEqual(player.body.rotation(), rotation);
+  assert.ok(camera.quaternion.equals(orientation));
+  movement.knockbackVelocity.set(0, 0, 0);
+  player.setPlayerPosition([20, 0, 0]);
+  applyExplosionBlast({ physics, player }, new THREE.Vector3(), 5);
+  assert.equal(movement.knockbackVelocity.length(), 0);
 });

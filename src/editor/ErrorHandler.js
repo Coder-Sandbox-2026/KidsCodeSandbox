@@ -27,10 +27,6 @@ const TYPO_SUGGESTIONS = {
   'createcake': 'createCake',
   'playExplosin': 'playExplosion',
   'playExploision': 'playExplosion',
-  'playTyphoon': 'playTyphoon',
-  'playTyphonn': 'playTyphoon',
-  'playTyphon': 'playTyphoon',
-  'playTypoon': 'playTyphoon',
 };
 
 export function formatFriendlyError(error, userCode) {

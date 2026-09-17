@@ -261,7 +261,6 @@ export class GameAPI {
       } : {}),
 
       playExplosion: (opts) => { engine.vfx?.playEmberExplosion(opts, run); },
-      playTyphoon: (options) => { engine.vfx?.createTyphoon(options, run); },
 
       print: (text, opts) => {
         this.hud.print(text, opts);
