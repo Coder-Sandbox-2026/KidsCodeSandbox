@@ -220,6 +220,7 @@ export class GameEngine {
     }
 
     this.vfx?.update(dt);
+    this.level?.update?.(dt);
     updateGoldStars(this, dt);
     for (const coin of this.goldCoins ?? []) coin.updateCoin(dt);
 
@@ -299,7 +300,9 @@ export class GameEngine {
     this.physics.reset();
     if (levelId !== this.levelId) {
       const Level = levelId === 'default' ? DefaultLevel : CHALLENGE_LEVEL_CLASSES[levelId];
-      this.level = new Level(this.scene, this.physics, this.environmentResources);
+      this.level = new Level(this.scene, this.physics, this.environmentResources, {
+        sunWorldPosition: this.sceneManager.sunMesh?.position,
+      });
       this.levelId = levelId;
     }
     this.player = new Player(this.sceneManager.camera, this.physics);

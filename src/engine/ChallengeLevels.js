@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { ChallengeLevel1 } from './ChallengeLevel1.js';
+import { Level12Water } from './Level12Water.js';
 
 const COLORS = [0x00bed3, 0xffca28, 0xf06449, 0x9155d9, 0x3284e8];
 
@@ -194,6 +195,110 @@ export class ChallengeLevel11 extends DawnTempleEnvironment {
       this._floating(x, z, height, color);
     }
     this._finish([[-55, -50], [53, -53], [52, 45], [-53, 49], [0, 52]]);
+  }
+}
+
+export class ChallengeLevel12 extends ChallengeEnvironment {
+  build() {
+    if (!this._begin()) return;
+
+    const centerX = 0, centerZ = -22, width = 34, depth = 24, surfaceY = 1.05;
+    this.waterRegion = Object.freeze({
+      minX: centerX - width / 2, maxX: centerX + width / 2,
+      minZ: centerZ - depth / 2, maxZ: centerZ + depth / 2,
+      surfaceY,
+      containsPosition(position) {
+        return position.x >= this.minX && position.x <= this.maxX
+          && position.z >= this.minZ && position.z <= this.maxZ
+          && position.y <= this.surfaceY;
+      },
+    });
+
+    // One low-poly bowl replaces visible shelf bands: pale shallows slope smoothly
+    // to a lower, warmer center while a hidden box provides simple collision.
+    this._box(width, 0.12, depth, centerX, 0.06, centerZ, 0xd8bd7c, false).name = 'poolBottom';
+    this.basinGeometry = new THREE.PlaneGeometry(width, depth, 12, 8);
+    const basinPositions = this.basinGeometry.attributes.position;
+    const basinColors = [];
+    const basinHeightAt = (x, z) => {
+      const nx = Math.abs(x) / (width / 2);
+      const nz = Math.abs(z) / (depth / 2);
+      return 0.12 + THREE.MathUtils.smoothstep(Math.pow(nx ** 4 + nz ** 4, 0.25), 0.48, 1.0) * 0.70;
+    };
+    for (let i = 0; i < basinPositions.count; i++) {
+      const x = basinPositions.getX(i), z = basinPositions.getY(i);
+      basinPositions.setZ(i, basinHeightAt(x, z));
+      const broadPatch = Math.sin(x * 0.24 + z * 0.17) * Math.sin(z * 0.29 - x * 0.11);
+      const finePatch = Math.sin(x * 0.73 - z * 0.51) * Math.sin(z * 0.91 + x * 0.38);
+      const variation = THREE.MathUtils.clamp(0.5 + broadPatch * 0.30 + finePatch * 0.20, 0, 1);
+      const sand = new THREE.Color(0xc99652).lerp(new THREE.Color(0xffdda0), variation);
+      basinColors.push(sand.r, sand.g, sand.b);
+    }
+    this.basinGeometry.setAttribute('color', new THREE.Float32BufferAttribute(basinColors, 3));
+    this.basinGeometry.computeVertexNormals();
+    const basin = this._mesh(this.basinGeometry, this.resources.vertexMaterial('sand'), centerX, 0, centerZ);
+    basin.rotation.x = -Math.PI / 2;
+    basin.name = 'poolBasin';
+    const rockGeometry = this.resources.scenery('rock');
+    const rockMaterial = this.resources.vertexMaterial('rock');
+    this.underwaterRockMaterial = rockMaterial.clone();
+    this.underwaterRockMaterial.color.set(0xb9aa94);
+    const rockPlacement = (x, z, sx, sy, sz, rotation) =>
+      [centerX + x, basinHeightAt(x, z) + sy * 0.72, centerZ + z, sx, sy, sz, rotation];
+    this._terrainInstances('underwaterRocks', this.underwaterRockMaterial, [
+      rockPlacement(-12.4, -7.8, 0.55, 0.32, 0.45, 0.4),
+      rockPlacement(-8.1, 5.4, 0.42, 0.26, 0.50, 1.7),
+      rockPlacement(-5.7, -2.8, 0.70, 0.38, 0.55, 2.4),
+      rockPlacement(-2.2, 7.1, 0.38, 0.22, 0.34, 0.9),
+      rockPlacement(1.8, -6.9, 0.48, 0.30, 0.62, 1.3),
+      rockPlacement(4.6, 3.8, 0.62, 0.34, 0.48, 2.8),
+      rockPlacement(7.9, -1.4, 0.35, 0.24, 0.42, 0.2),
+      rockPlacement(10.8, 7.0, 0.58, 0.31, 0.46, 2.0),
+      rockPlacement(12.5, -6.3, 0.44, 0.28, 0.56, 1.0),
+      rockPlacement(0.2, 1.1, 0.52, 0.27, 0.40, 2.5),
+    ], rockGeometry);
+    const emergentRocks = this._terrainInstances('emergentPoolRocks', rockMaterial, [
+      rockPlacement(-13.8, 2.0, 1.35, 1.05, 1.10, 0.5),
+      rockPlacement(12.8, -2.7, 1.15, 0.92, 1.35, 2.1),
+      rockPlacement(-9.6, -8.8, 0.95, 0.82, 1.05, 1.4),
+    ], rockGeometry);
+    emergentRocks.castShadow = true;
+    const bank = this.resources.material(0xdab66e, 0.88);
+    for (const [x, z, w, d] of [
+      [centerX, centerZ - depth / 2 - 1.5, width + 6, 3],
+      [centerX, centerZ + depth / 2 + 1.5, width + 6, 3],
+      [centerX - width / 2 - 1.5, centerZ, 3, depth],
+      [centerX + width / 2 + 1.5, centerZ, 3, depth],
+    ]) {
+      const edge = this._box(w, 1.20, d, x, 0.60, z, bank.color.getHex(), false);
+      edge.name = 'poolBank';
+    }
+
+    this.water = new Level12Water({
+      createMesh: (...args) => this._mesh(...args),
+      centerX, centerZ, width, depth, surfaceY,
+      sunWorldPosition: this.sunWorldPosition,
+      rippleCenters: [[-13.8, 2.0], [12.8, -2.7], [-9.6, -8.8]],
+    });
+    this.waterSurface = this.water.object3D;
+
+    this._finish([[-38, -32], [39, -31], [-38, 26], [39, 27]]);
+  }
+
+  update(dt) {
+    this.water?.update(dt);
+  }
+
+  clear() {
+    super.clear();
+    this.water?.dispose();
+    this.basinGeometry?.dispose();
+    this.underwaterRockMaterial?.dispose();
+    this.water = null;
+    this.basinGeometry = null;
+    this.underwaterRockMaterial = null;
+    this.waterSurface = null;
+    this.waterRegion = null;
   }
 }
 

@@ -11,6 +11,7 @@ export const CHALLENGE_LEVEL_CONFIG = Object.freeze(Object.fromEntries([
   [[33.609, 7.950, -33.082], [-0.780, 0, 0.626], [-27.5, 2, -26.5], 0.2],
   [[44.661, 22.250, -15.425], [0.078, 0, 0.997], [-28, 12, -31.1], 1.0],
   [[24.627, 0.950, 40.763], [0.042, 0, -0.999], [23.5, 28, 42.3], 0.9],
+  [[0, 0.950, 12], [0, 0, -1], [0, 2, -22], 0.25],
 ].map(([position, direction, goldStarPosition, scale], index) => [index + 1, Object.freeze({
   playerPosition: Object.freeze(position), playerDirection: Object.freeze(direction),
   goldStar: Object.freeze({ position: Object.freeze(goldStarPosition), scale }),

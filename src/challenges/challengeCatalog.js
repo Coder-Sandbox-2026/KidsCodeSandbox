@@ -1,13 +1,17 @@
-/** Session-only beginner challenges. Challenge 12 awaits API clarification. */
-export const CHALLENGES = Object.freeze([
-  Object.freeze({
-  "id": 1,
-  "title": "Challenge 1 \u2014 Your First Message",
+const FIRST_MESSAGE_OBJECTIVE = Object.freeze({
   "objective": "Use print() to display a message.",
   "example": "print(\"This is my game!\");",
   "help": "print() lets your program show a message. Put text inside quotation marks, inside the parentheses.",
   "helpExample": "print(\"Hello!\");\nprint(\"I made my first game!\");",
   "validation": "print"
+});
+
+/** Session-only beginner challenges. */
+export const CHALLENGES = Object.freeze([
+  Object.freeze({
+  "id": 1,
+  "title": "Challenge 1 \u2014 Your First Message",
+  ...FIRST_MESSAGE_OBJECTIVE
 }),
   Object.freeze({
   "id": 2,
@@ -98,5 +102,10 @@ export const CHALLENGES = Object.freeze([
   "help": "The first line gets the player. The second calls one of the player's functions. setJumpForce(20) changes how strongly the player jumps. A larger force generally makes a higher jump.",
   "helpExample": "const player = getPlayer();\nplayer.setJumpForce(20);",
   "validation": "setJumpForce"
+}),
+  Object.freeze({
+  "id": 12,
+  "title": "Challenge 12 \u2014 Water Playground",
+  ...FIRST_MESSAGE_OBJECTIVE
 })
 ]);

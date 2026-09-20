@@ -9,10 +9,11 @@ const COLORS = {
 };
 
 export class ChallengeLevel1 {
-  constructor(scene, physics, resources = new EnvironmentResources()) {
+  constructor(scene, physics, resources = new EnvironmentResources(), { sunWorldPosition } = {}) {
     this.scene = scene;
     this.physics = physics;
     this.resources = resources;
+    this.sunWorldPosition = sunWorldPosition;
     this.environment = 'day';
     this.meshes = [];
     this.physicsBodies = [];

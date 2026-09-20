@@ -228,9 +228,12 @@ const challengeResetBtn = document.getElementById('btn-challenge-reset');
 
   document.addEventListener('pointerlockchange', () => {
     const locked = !!document.pointerLockElement;
+    const viewportPane = document.getElementById('viewport-pane');
+    const waterDebugPointerFree = document.fullscreenElement === viewportPane
+      && viewportPane?.dataset.waterDebugPointerFree === 'true';
     updateMusicVolume();
-    playOverlay.classList.toggle('hidden', locked);
-    if (!locked) {
+    playOverlay.classList.toggle('hidden', locked || waterDebugPointerFree);
+    if (!locked && !waterDebugPointerFree) {
       stopGame({ preserveSuccess: true });
     }
   });

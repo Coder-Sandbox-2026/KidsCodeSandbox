@@ -77,7 +77,7 @@ test('current briefing, answer, next/reset/clear, and final catalog boundary', a
     onAdvance(level) { assert.equal(code, ''); selected = level; resets++; },
   });
   const [feedback, overlay] = viewport.children;
-  for (let i = 0; i < 11; i++) {
+  for (let i = 0; i < 12; i++) {
     assert.equal(ui.currentChallenge, CHALLENGES[i]);
     assert.ok(CHALLENGES[i].title.startsWith('Challenge ' + (i + 1) + ' \u2014 '));
     assert.equal(overlay.querySelector('h2').textContent, CHALLENGES[i].title);
@@ -85,7 +85,7 @@ test('current briefing, answer, next/reset/clear, and final catalog boundary', a
     assert.equal(overlay.querySelector('#challenge-briefing-help').querySelector('p').textContent, CHALLENGES[i].help);
     overlay.querySelector('[data-action="answer"]').click();
     assert.equal(code, CHALLENGES[i].example);
-    assert.equal(ui.hasNextChallenge(), i + 1 < 11);
+    assert.equal(ui.hasNextChallenge(), i + 1 < 12);
     if (ui.hasNextChallenge()) {
       ui.setComplete(true);
       assert.equal(await ui.nextChallenge(), true);
@@ -96,7 +96,7 @@ test('current briefing, answer, next/reset/clear, and final catalog boundary', a
     }
   }
   assert.equal(await ui.nextChallenge(), false);
-  assert.equal(resets, 10);
+  assert.equal(resets, 11);
   assert.equal(Object.isFrozen(CHALLENGES), true);
   assert.equal(CHALLENGES.every(Object.isFrozen), true);
 });
@@ -127,13 +127,16 @@ test('dropdown jumps and Next share selected stage, objective, UI and reward con
   select(1); select(8); verify(8);
   select(9); await ui.nextChallenge(); verify(10);
   await ui.nextChallenge(); verify(11);
+  await ui.nextChallenge(); verify(12);
   assert.equal(ui.hasNextChallenge(), false);
-  assert.equal(select(12), false);
+  assert.equal(select(13), false);
   assert.deepEqual(CHALLENGE_LEVEL_CONFIG[6].goldStar, { position: [-0.4, 8.3, -37.6], scale: 0.6 });
   assert.deepEqual(CHALLENGE_LEVEL_CONFIG[7].goldStar, { position: [35, 2, 42.7], scale: 0.2 });
   assert.deepEqual(CHALLENGE_LEVEL_CONFIG[8].playerPosition, [30.973, 17.950, 24.599]);
   assert.deepEqual(CHALLENGE_LEVEL_CONFIG[8].playerDirection, [-0.999, 0, 0.050]);
-  assert.equal(Object.keys(CHALLENGE_LEVEL_CONFIG).length, 11);
+  assert.equal(Object.keys(CHALLENGE_LEVEL_CONFIG).length, 12);
+  assert.equal(CHALLENGES[11].validation, CHALLENGES[0].validation);
+  assert.equal(CHALLENGES[11].objective, CHALLENGES[0].objective);
   assert.deepEqual(CHALLENGE_LEVEL_CONFIG[10].playerPosition, [44.661, 22.250, -15.425]);
   assert.deepEqual(CHALLENGE_LEVEL_CONFIG[10].playerDirection, [0.078, 0, 0.997]);
   assert.deepEqual(CHALLENGE_LEVEL_CONFIG[10].goldStar, { position: [-28, 12, -31.1], scale: 1.0 });
@@ -145,5 +148,5 @@ test('dropdown jumps and Next share selected stage, objective, UI and reward con
   assert.deepEqual(CHALLENGE_LEVEL_CONFIG[1].playerDirection, [-0.589, 0, 0.808]);
   assert.deepEqual(CHALLENGE_LEVEL_CONFIG[1].goldStar, { position: [23.7, 6, -20.4], scale: 0.2 });
   const html = await readFile(new URL('../../index.html', import.meta.url), 'utf8');
-  for (const id of [10, 11]) assert.ok(html.includes(`data-challenge-level="${id}"`));
+  for (const id of [10, 11, 12]) assert.ok(html.includes(`data-challenge-level="${id}"`));
 });

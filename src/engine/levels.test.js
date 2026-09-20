@@ -444,12 +444,12 @@ test('all eleven challenge stages have one tessellated checker surface without c
 });
 
 
-test('Create reuses stages 1, 7 and 11 and starts without enabling Challenge systems', async t => {
+test('Create reuses stages 1, 7, 11 and 12 and starts without enabling Challenge systems', async t => {
   const { selectedStage, CREATE_LEVEL_CHOICES } = await import('./stageSelection.js');
   const engine = await fixture(t);
   assert.deepEqual(CREATE_LEVEL_CHOICES.map(choice => choice.label),
-    Array.from({ length: 11 }, (_, i) => `Level ${i + 1}`));
-  for (const level of [1, 7, 11]) {
+    Array.from({ length: 12 }, (_, i) => `Level ${i + 1}`));
+  for (const level of [1, 7, 11, 12]) {
     const stage = selectedStage({ mode: 'create', level, challengeLevel: 2 });
     assert.equal(stage.challenge, false);
     assert.equal(stage.levelId, `challenge-${level}`);
@@ -462,4 +462,26 @@ test('Create reuses stages 1, 7 and 11 and starts without enabling Challenge sys
     assert.equal(challenge.challenge, true);
     assert.equal(challenge.levelId, stage.levelId);
   }
+});
+
+test('level 12 water animates and releases its private GPU resources', async t => {
+  const engine = await fixture(t);
+  engine.loadLevel('challenge-12');
+  const { level } = engine;
+  const water = level.meshes.find(mesh => mesh.name === 'waterSurface');
+  assert.ok(water?.material.isShaderMaterial);
+  assert.equal(water.geometry.attributes.position.count, 33 * 25);
+  assert.equal(level.waterRegion.surfaceY, water.position.y);
+  assert.equal(level.waterRegion.containsPosition(new THREE.Vector3(0, 0.2, -22)), true);
+  assert.equal(level.waterRegion.containsPosition(new THREE.Vector3(30, 0.2, -22)), false);
+  const time = water.material.uniforms.time.value;
+  level.update(0.25);
+  assert.equal(water.material.uniforms.time.value, time + 0.25);
+  let geometryDisposed = false, materialDisposed = false;
+  water.geometry.addEventListener('dispose', () => { geometryDisposed = true; });
+  water.material.addEventListener('dispose', () => { materialDisposed = true; });
+  engine.loadLevel('challenge-1');
+  assert.equal(water.parent, null);
+  assert.equal(geometryDisposed, true);
+  assert.equal(materialDisposed, true);
 });
