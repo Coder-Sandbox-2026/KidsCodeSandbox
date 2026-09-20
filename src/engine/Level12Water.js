@@ -2,6 +2,7 @@ import * as THREE from 'three';
 
 const waterCausticsUrl = new URL('../assets/textures/water-caustics.png', import.meta.url).href;
 const LEVEL_12_WATER_DEBUG = true;
+const LEVEL_12_FPS_DEBUG = true;
 
 const LEVEL_12_WATER_DEFAULTS = Object.freeze({
   largeWaveHeight: 0.035, largeWaveFrequency: 0.8, largeWaveSpeed: 0.8,
@@ -359,6 +360,23 @@ export class Level12Water {
     water.renderOrder = 1;
     this.object3D = water;
     this._createWaterDebugPanel();
+    this._createFpsDisplay();
+  }
+
+  _createFpsDisplay() {
+    if (!LEVEL_12_FPS_DEBUG || typeof document === 'undefined'
+      || typeof document.getElementById !== 'function') return;
+    const host = document.getElementById('viewport-pane');
+    if (!host) return;
+    host.querySelector('[data-level12-fps]')?.remove();
+    const display = document.createElement('div');
+    display.dataset.level12Fps = '';
+    display.textContent = 'FPS: --';
+    display.style.cssText = 'position:absolute;left:10px;top:10px;z-index:10000;padding:5px 8px;color:#dff;font:bold 13px/1 monospace;background:rgba(5,24,38,.78);border:1px solid rgba(130,225,255,.4);border-radius:4px;pointer-events:none;';
+    host.appendChild(display);
+    this.fpsDisplay = display;
+    this.fpsElapsed = 0;
+    this.fpsFrames = 0;
   }
 
   _createWaterDebugPanel() {
@@ -458,6 +476,15 @@ export class Level12Water {
   }
   update(dt) {
     if (this.waterMaterial) this.waterMaterial.uniforms.time.value += dt;
+    if (this.fpsDisplay && Number.isFinite(dt) && dt > 0) {
+      this.fpsElapsed += dt;
+      this.fpsFrames += 1;
+      if (this.fpsElapsed >= 0.5) {
+        this.fpsDisplay.textContent = `FPS: ${Math.round(this.fpsFrames / this.fpsElapsed)}`;
+        this.fpsElapsed = 0;
+        this.fpsFrames = 0;
+      }
+    }
   }
 
   dispose() {
@@ -472,6 +499,8 @@ export class Level12Water {
     }
     this.waterDebugPanel?.remove();
     this.waterDebugPanel = null;
+    this.fpsDisplay?.remove();
+    this.fpsDisplay = null;
     this.waterGeometry?.dispose();
     this.waterMaterial?.dispose();
     this.waterCausticsTexture?.dispose();
