@@ -14,11 +14,17 @@ const SHADOW_MAP_SIZE = {
   high: 2048,
 };
 
+const BLOOM_RESOLUTION_SCALE = {
+  reduced: 0.5,
+  full: 1,
+};
+
 // This is the final composer pass. Combine in linear space, then apply output
 // conversion once in bloom's existing final draw (no additional fullscreen pass).
 class OutputBloomPass extends UnrealBloomPass {
   constructor(...args) {
     super(...args);
+    this.resolutionScale = 1;
     this.blendMaterial.uniforms.sceneTexture = { value: null };
     this.blendMaterial.blending = THREE.NoBlending;
     this.blendMaterial.transparent = false;
@@ -37,6 +43,17 @@ class OutputBloomPass extends UnrealBloomPass {
     `;
   }
 
+  setResolutionScale(scale) {
+    this.resolutionScale = scale;
+  }
+
+  setSize(width, height) {
+    super.setSize(
+      Math.max(1, Math.round(width * this.resolutionScale)),
+      Math.max(1, Math.round(height * this.resolutionScale)),
+    );
+  }
+
   render(renderer, writeBuffer, readBuffer, deltaTime, maskActive) {
     this.blendMaterial.uniforms.sceneTexture.value = readBuffer.texture;
     super.render(renderer, writeBuffer, readBuffer, deltaTime, maskActive);
@@ -49,6 +66,7 @@ export class Renderer {
     this.settings = settings;
     this.shadowLight = null;
     this._appliedShadowQuality = null;
+    this.bloomPass = null;
 
     // WebGL renderer
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -113,7 +131,9 @@ export class Renderer {
       0.4,   // radius
       0.85   // threshold
     );
+    bloom.setResolutionScale(this._getBloomResolutionScale());
     this.composer.addPass(bloom);
+    this.bloomPass = bloom;
   }
 
   render(scene, camera) {
@@ -135,9 +155,16 @@ export class Renderer {
     this.renderer.setPixelRatio(pixelRatio);
     this.renderer.setSize(width, height);
     if (this.composer) {
+      this.bloomPass?.setResolutionScale(this._getBloomResolutionScale());
       this.composer.setPixelRatio(pixelRatio);
       this.composer.setSize(width, height);
     }
+  }
+
+  _getBloomResolutionScale() {
+    const profile = GRAPHICS_PROFILES[this.settings.get('graphicsProfile')]
+      || GRAPHICS_PROFILES.medium;
+    return BLOOM_RESOLUTION_SCALE[profile.bloomQuality] ?? BLOOM_RESOLUTION_SCALE.reduced;
   }
 
   _getSize() {

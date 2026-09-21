@@ -17,6 +17,22 @@ test('profiles define the intended shadow quality tiers', async () => {
   assert.equal(GRAPHICS_PROFILES.ultra.shadowQuality, 'high');
 });
 
+test('profiles define reduced bloom for Low/Medium and full bloom for High/Ultra', async () => {
+  const { GRAPHICS_PROFILES } = await import('./graphicsProfiles.js');
+  assert.equal(GRAPHICS_PROFILES.low.bloomQuality, 'reduced');
+  assert.equal(GRAPHICS_PROFILES.medium.bloomQuality, 'reduced');
+  assert.equal(GRAPHICS_PROFILES.high.bloomQuality, 'full');
+  assert.equal(GRAPHICS_PROFILES.ultra.bloomQuality, 'full');
+});
+
+test('profiles define generic water quality tiers', async () => {
+  const { GRAPHICS_PROFILES } = await import('./graphicsProfiles.js');
+  assert.equal(GRAPHICS_PROFILES.low.waterQuality, 'low');
+  assert.equal(GRAPHICS_PROFILES.medium.waterQuality, 'medium');
+  assert.equal(GRAPHICS_PROFILES.high.waterQuality, 'high');
+  assert.equal(GRAPHICS_PROFILES.ultra.waterQuality, 'ultra');
+});
+
 test('manual targets override profiles and never exceed native resolution', () => {
   assert.equal(getTargetRenderHeight('high', '720'), 720);
   assert.equal(getRenderPixelRatio(1080, 1, 'medium', 'profile'), 720 / 1080);

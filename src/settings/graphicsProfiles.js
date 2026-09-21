@@ -1,9 +1,9 @@
 /** Graphics profile data shared by Settings and the WebGL renderer. */
 export const GRAPHICS_PROFILES = {
-  low: { label: 'Low', targetHeight: 540, shadowQuality: 'off' },
-  medium: { label: 'Medium', targetHeight: 720, shadowQuality: 'medium' },
-  high: { label: 'High', targetHeight: 900, shadowQuality: 'high' },
-  ultra: { label: 'Ultra', targetHeight: null, shadowQuality: 'high' },
+  low: { label: 'Low', targetHeight: 540, shadowQuality: 'off', bloomQuality: 'reduced', waterQuality: 'low' },
+  medium: { label: 'Medium', targetHeight: 720, shadowQuality: 'medium', bloomQuality: 'reduced', waterQuality: 'medium' },
+  high: { label: 'High', targetHeight: 900, shadowQuality: 'high', bloomQuality: 'full', waterQuality: 'high' },
+  ultra: { label: 'Ultra', targetHeight: null, shadowQuality: 'high', bloomQuality: 'full', waterQuality: 'ultra' },
 };
 
 export const RENDER_RESOLUTION_OPTIONS = [

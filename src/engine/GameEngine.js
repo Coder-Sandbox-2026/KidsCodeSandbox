@@ -16,6 +16,8 @@ import { AudioManager } from '../audio/AudioManager.js';
 import { CHALLENGE_LEVEL_CONFIG } from '../challenges/challengeLevelConfig.js';
 import { updateGoldStars, clearGoldStars } from '../api/GoldStar.js';
 import * as THREE from 'three';
+import { appSettings } from '../settings/appSettings.js';
+import { GRAPHICS_PROFILES } from '../settings/graphicsProfiles.js';
 
 export class GameEngine {
   constructor(container) {
@@ -48,6 +50,9 @@ export class GameEngine {
     this._raycaster = new THREE.Raycaster();
     this._pointer = new THREE.Vector2();
     this._onCanvasClick = (event) => this._handleClick(event);
+    appSettings.subscribe((_values, key) => {
+      if (key === 'graphicsProfile') this._applyWaterQuality();
+    });
   }
 
   async init() {
@@ -248,6 +253,7 @@ export class GameEngine {
       return;
     }
     if (this.levelLoaded) return;
+    this._applyWaterQuality();
     this.level.build();
     this.sceneManager.applyEnvironment?.(this.level.environment ?? 'day');
     const config = CHALLENGE_LEVEL_CONFIG[this.levelId.replace('challenge-', '')];
@@ -257,6 +263,12 @@ export class GameEngine {
     }
     this.levelLoaded = true;
     this.vfx?.retainTyphoonTextures();
+  }
+
+  _applyWaterQuality() {
+    const profile = GRAPHICS_PROFILES[appSettings.get('graphicsProfile')]
+      || GRAPHICS_PROFILES.medium;
+    this.level?.setWaterQuality?.(profile.waterQuality);
   }
 
   _validateLevelId(levelId) {

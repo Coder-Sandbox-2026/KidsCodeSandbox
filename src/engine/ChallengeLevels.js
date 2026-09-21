@@ -289,6 +289,7 @@ export class ChallengeLevel12 extends ChallengeEnvironment {
       },
       caustics: true,
       rippleCenters: [[-13.8, 2.0], [12.8, -2.7], [-9.6, -8.8]],
+      quality: this.waterQuality,
       debug: true,
       fpsDebug: true,
     });
@@ -299,6 +300,11 @@ export class ChallengeLevel12 extends ChallengeEnvironment {
 
   update(dt) {
     this.water?.update(dt);
+  }
+
+  setWaterQuality(quality) {
+    this.waterQuality = quality;
+    this.water?.setQuality(quality);
   }
 
   clear() {

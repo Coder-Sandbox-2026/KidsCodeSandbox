@@ -4,6 +4,9 @@ const waterCausticsUrl = new URL('../assets/textures/water-caustics.png', import
 const POOL_WATER_DEBUG = false;
 const POOL_WATER_FPS_DEBUG = false;
 const MAX_REFLECTED_CLOUDS = 10;
+const WATER_QUALITY_VARIANTS = Object.freeze({
+  low: 'LOW', medium: 'MEDIUM', high: 'FULL', ultra: 'FULL',
+});
 
 const POOL_WATER_DEFAULTS = Object.freeze({
   largeWaveHeight: 0.035, largeWaveFrequency: 0.8, largeWaveSpeed: 0.8,
@@ -13,10 +16,10 @@ const POOL_WATER_DEFAULTS = Object.freeze({
   slopeLightStrength: 1.4, slopeDarkeningStrength: 1.0, sunlitWaveStrength: 0.105,
   softSpecularStrength: 0.59, sharpGlintStrength: 1.2, specularSharpness: 74,
   crestHighlightStrength: 0.38, shallowAlpha: 0.08, deepAlpha: 0.98,
-  skyReflectionStrength: 0, skyHorizonInfluence: 1.0, skyTopInfluence: 0.80,
-  cloudReflectionStrength: 0.12,
-  sunReflectionStrength: 9.4, sunReflectionWidth: 0, sunReflectionLength: 0.83,
-  sunGlintWarmth: 0.65,
+  skyReflectionStrength: 0, skyHorizonInfluence: 0.8, skyTopInfluence: 0.7,
+  cloudReflectionStrength: 0.88,
+  sunReflectionStrength: 17.2, sunReflectionWidth: 0, sunReflectionLength: 0.73,
+  sunGlintWarmth: 0,
   shallowAquaStrength: 0.145, deepBlueStrength: 1.0,
   depthTransitionWidth: 0.86, depthTransitionBias: 0.05,
   causticStrength: 1.0, causticScale: 0.6, causticSpeed: 1.0, causticWarp: 1.0,
@@ -74,17 +77,22 @@ export class PoolWater {
     createMesh, centerX, centerZ, width, depth, surfaceY,
     sunlight = null, skyReflection = true, cloudReflection = null,
     caustics = true, rippleCenters = [],
+    quality = 'high',
     debug = POOL_WATER_DEBUG, fpsDebug = POOL_WATER_FPS_DEBUG,
   }) {
     this.debug = debug;
     this.fpsDebug = fpsDebug;
+    this.quality = WATER_QUALITY_VARIANTS[quality] ? quality : 'high';
+    this.qualityVariant = WATER_QUALITY_VARIANTS[this.quality];
     const rippleSeeds = [0.3, 1.7, 2.8];
-    const rippleCalls = rippleCenters.map(([x, z], index) => {
+    const buildRippleCalls = (centers) => centers.map(([x, z], index) => {
       const u = (x / (width - 0.3) + 0.5).toFixed(3);
       const v = (-z / (depth - 0.3) + 0.5).toFixed(3);
       const seed = rippleSeeds[index] ?? (0.3 + index * 1.1);
       return `rockRipples(vUv, vec2(${u}, ${v}), ${seed.toFixed(3)})`;
     }).join('\n            + ') || '0.0';
+    const rippleCalls = buildRippleCalls(rippleCenters);
+    const mediumRippleCalls = buildRippleCalls(rippleCenters.slice(0, 2));
 
     const sunlightPosition = sunlight?.position;
     const sunlightEnabled = sunlightPosition ? 1 : 0;
@@ -121,6 +129,7 @@ export class PoolWater {
       image.src = waterCausticsUrl;
     }
     this.waterMaterial = new THREE.ShaderMaterial({
+      defines: { [`WATER_QUALITY_${this.qualityVariant}`]: 1 },
       transparent: true,
       premultipliedAlpha: true,
       depthWrite: false,
@@ -213,6 +222,7 @@ export class PoolWater {
         varying float vSurface;
         varying vec3 vWorldPosition;
         varying vec3 vWorldNormal;
+        #if !defined(WATER_QUALITY_LOW)
         float rockRipples(vec2 uv, vec2 center, float seed) {
           vec2 offset = (uv - center) * vec2(waterSize.x / waterSize.y, 1.0);
           float angle = atan(offset.y, offset.x);
@@ -225,6 +235,7 @@ export class PoolWater {
           }
           return rings * (1.0 - smoothstep(0.07, 0.14, radius));
         }
+        #endif
         void main() {
           vec2 waterAspect = vec2(waterSize.x / waterSize.y, 1.0);
           vec2 p = (vUv - 0.5) * waterAspect;
@@ -239,6 +250,7 @@ export class PoolWater {
           float depthShape = (1.0 - roundedEdge) + (warp.x + warp.y) * 0.035 + depthWarp;
           float depth = smoothstep(depthTransitionBias - depthTransitionWidth * 0.5,
             depthTransitionBias + depthTransitionWidth * 0.5, depthShape);
+          #if !defined(WATER_QUALITY_LOW)
           vec2 screenUv = (gl_FragCoord.xy - waterViewport.xy) / waterViewport.zw;
           vec4 viewRay = inverseProjectionMatrix * vec4(screenUv * 2.0 - 1.0, 1.0, 1.0);
           vec3 rayDirection = normalize((cameraWorldMatrix * vec4(viewRay.xyz / viewRay.w, 0.0)).xyz);
@@ -252,36 +264,52 @@ export class PoolWater {
             cos(dot(causticP, vec2(-4.4, 8.1)) - time * 0.16)
           ) * 0.065 * causticWarp;
           mat2 causticTurnA = mat2(0.96, -0.28, 0.28, 0.96);
-          mat2 causticTurnB = mat2(0.79, -0.61, 0.61, 0.79);
           vec2 cellsUv = causticTurnA * ((planarUv - 0.5) * vec2(6.83, 5.07) * causticScale)
             + 7.0 + causticDomainWarp * 0.48
             + vec2(time * 0.012, -time * 0.009) * causticSpeed;
+          float textureA = texture2D(causticsMap, cellsUv).r;
+          float softA = smoothstep(0.27, 0.67, textureA);
+          float coreA = smoothstep(0.58, 0.88, textureA);
+          #if defined(WATER_QUALITY_FULL)
+          mat2 causticTurnB = mat2(0.79, -0.61, 0.61, 0.79);
           vec2 fineUv = causticTurnB * ((planarUv - 0.5) * vec2(10.27, 7.19) * causticScale)
             + 12.0 + causticDomainWarp.yx * 0.62
             + vec2(-time * 0.010, time * 0.014) * causticSpeed;
-          float textureA = texture2D(causticsMap, cellsUv).r;
           float textureB = texture2D(causticsMap, fineUv).r;
-          float softA = smoothstep(0.27, 0.67, textureA);
           float softB = smoothstep(0.31, 0.72, textureB);
-          float coreA = smoothstep(0.58, 0.88, textureA);
           float coreB = smoothstep(0.64, 0.91, textureB);
           float primary = clamp(softA * 0.76 + softB * 0.20, 0.0, 1.0);
           float secondary = coreA * 0.68 + coreB * 0.24;
           float focus = coreA * coreB;
+          #else
+          float primary = softA * 0.96;
+          float secondary = coreA * 0.82;
+          float focus = coreA * coreA * 0.45;
+          #endif
           float causticDepth = mix(1.0, causticDeepAttenuation,
             smoothstep(causticShallowFalloff, 0.96, depth));
           primary *= causticDepth;
           secondary *= causticDepth * 0.38;
           focus *= causticDepth;
           float shimmer = smoothstep(0.72, 0.98, sin(dot(p + warp, vec2(21.0, -17.0)) + time * 0.43) * 0.5 + 0.5);
+          #else
+          float primary = 0.0, secondary = 0.0, focus = 0.0, shimmer = 0.0;
+          #endif
+          #if !defined(WATER_QUALITY_LOW)
           float rippleWarpA = sin(dot(vUv, vec2(15.0, -11.0)) - time * 0.33)
             + sin(dot(vUv, vec2(-7.0, 19.0)) + time * 0.21) * 0.55;
-          float rippleWarpB = cos(dot(vUv, vec2(12.0, 17.0)) + time * 0.27)
-            + sin(dot(vUv, vec2(21.0, -6.0)) - time * 0.18) * 0.48;
           float ripplePhaseA = dot(vUv, vec2(121.0, 37.0) * microRippleFrequency)
             + time * 2.05 * microRippleSpeed + rippleWarpA * 1.35;
+          #if defined(WATER_QUALITY_FULL)
+          float rippleWarpB = cos(dot(vUv, vec2(12.0, 17.0)) + time * 0.27)
+            + sin(dot(vUv, vec2(21.0, -6.0)) - time * 0.18) * 0.48;
           float ripplePhaseB = dot(vUv, vec2(-43.0, 137.0) * microRippleFrequency)
             - time * 1.72 * microRippleSpeed + rippleWarpB * 1.20;
+          #endif
+          #endif
+          #if defined(WATER_QUALITY_LOW)
+          vec3 analyticalNormal = normalize(vWorldNormal);
+          #else
           vec2 waterPosition = (vUv - 0.5) * waterSize;
           vec2 directionA = normalize(vec2(0.86, 0.51));
           vec2 directionB = normalize(vec2(-0.62, 0.78));
@@ -298,15 +326,28 @@ export class PoolWater {
             + mediumGradient * (cos(mediumPhase) + cos(mediumPhase * 2.0) * 0.32) * mediumWaveHeight
             + directionC * cos(smallPhase) * 0.03315;
           vec3 analyticalNormal = normalize(vec3(-waveGradient.x, 1.0, waveGradient.y));
+          #endif
+          #if defined(WATER_QUALITY_LOW)
+          vec3 surfaceNormal = analyticalNormal;
+          #elif defined(WATER_QUALITY_MEDIUM)
+          vec3 surfaceNormal = normalize(analyticalNormal + vec3(
+            cos(ripplePhaseA) * microRippleStrength,
+            0.0,
+            cos(ripplePhaseA) * 0.55 * microRippleStrength
+          ));
+          #else
           vec3 surfaceNormal = normalize(analyticalNormal + vec3(
             (cos(ripplePhaseA) + cos(ripplePhaseB) * 0.625) * microRippleStrength,
             0.0,
             (cos(ripplePhaseA) * 0.55 - cos(ripplePhaseB) * 0.95) * microRippleStrength
           ));
+          #endif
           vec3 viewDirection = normalize(cameraPosition - vWorldPosition);
           float downwardView = clamp(dot(surfaceNormal, viewDirection), 0.0, 1.0);
           float fresnel = pow(1.0 - downwardView, fresnelPower);
+          #if !defined(WATER_QUALITY_LOW)
           float causticVisibility = mix(0.10, 1.0, pow(downwardView, 0.72));
+          #endif
           float deepVariation = sin(dot(p, vec2(4.1, -2.7)) + time * 0.10) * 0.032
             + cos(dot(p, vec2(-3.3, 3.8)) - time * 0.07) * 0.023;
           float colorDepth = clamp(depth + deepVariation * smoothstep(0.10, 0.88, depth), 0.0, 1.0);
@@ -315,6 +356,9 @@ export class PoolWater {
           vec3 deep = vec3(0.018, 0.245, 0.58);
           vec3 color = mix(shallow, middle, smoothstep(0.02, 0.76, colorDepth));
           color = mix(color, deep, smoothstep(0.62, 1.0, colorDepth) * deepBlueStrength * 0.90);
+          #if defined(WATER_QUALITY_LOW)
+          vec3 causticLight = vec3(0.0);
+          #else
           float shallowCaustics = mix(1.45, 0.62, smoothstep(0.06, 0.70, depth));
           float causticVisibilityStrength = causticVisibility * shallowCaustics;
           float cellInterior = (1.0 - smoothstep(0.24, 0.48, textureA))
@@ -324,9 +368,16 @@ export class PoolWater {
           causticLight += vec3(0.96, 0.91, 0.72) * secondary * 0.16;
           causticLight += vec3(1.00, 0.97, 0.86) * focus * 0.28;
           causticLight *= causticVisibilityStrength * causticStrength * causticsEnabled;
+          #endif
+          #if defined(WATER_QUALITY_MEDIUM)
+          float ripples = ${mediumRippleCalls};
+          color += vec3(0.62, 0.96, 1.0) * ripples * rockRippleStrength;
+          color += vec3(0.30, 0.84, 0.92) * smoothstep(0.08, 0.48, ripples) * 0.08;
+          #elif defined(WATER_QUALITY_FULL)
           float ripples = ${rippleCalls};
           color += vec3(0.62, 0.96, 1.0) * ripples * rockRippleStrength;
           color += vec3(0.30, 0.84, 0.92) * smoothstep(0.08, 0.48, ripples) * 0.08;
+          #endif
           vec3 sunOffset = sunWorldPosition - vWorldPosition;
           float sunDistance = length(sunOffset);
           vec3 sunDirection = sunlightEnabled > 0.5 && sunDistance > 0.0001
@@ -336,6 +387,10 @@ export class PoolWater {
           float sunlitWave = smoothstep(flatSunFacing + 0.01, flatSunFacing + 0.075,
             max(dot(analyticalNormal, sunDirection), 0.0));
           float broadReflectedSun = max(dot(reflect(-sunDirection, analyticalNormal), viewDirection), 0.0);
+          float slopeLight = dot(surfaceNormal, normalize(vec3(-0.68, 0.0, 0.73)));
+          float crestLight = smoothstep(0.022, 0.052, vSurface);
+          float broadShine = 0.5 + 0.5 * sin(dot(p + warp * 0.4, vec2(5.0, -3.0)) + time * 0.22);
+          #if defined(WATER_QUALITY_FULL)
           float reflectedSun = max(dot(reflect(-sunDirection, surfaceNormal), viewDirection), 0.0);
           float focusedSunResponse = pow(broadReflectedSun, mix(14.0, 3.0, sunReflectionWidth));
           float extendedSunResponse = pow(broadReflectedSun, mix(8.0, 1.5, sunReflectionLength));
@@ -343,9 +398,6 @@ export class PoolWater {
             max(focusedSunResponse, extendedSunResponse * 0.65), sunReflectionLength);
           float waveHighlight = pow(smoothstep(0.42, 0.88, reflectedSun), 1.6);
           float sunGlint = pow(reflectedSun, specularSharpness);
-          float slopeLight = dot(surfaceNormal, normalize(vec3(-0.68, 0.0, 0.73)));
-          float crestLight = smoothstep(0.022, 0.052, vSurface);
-          float broadShine = 0.5 + 0.5 * sin(dot(p + warp * 0.4, vec2(5.0, -3.0)) + time * 0.22);
           float streakBands = sin(dot(vUv, vec2(83.0, -29.0)) + time * 1.08 + warp.x * 17.0);
           streakBands += sin(dot(vUv, vec2(-47.0, 96.0)) - time * 0.73 + warp.y * 13.0) * 0.65;
           float patchField = sin(dot(vUv, vec2(39.0, 57.0)) - time * 0.46 + rippleWarpA);
@@ -361,12 +413,49 @@ export class PoolWater {
             * (0.45 + fresnel * 0.55);
           float sharpHighlight = macroSunReflection * sunGlint * smoothstep(0.58, 0.94, rippleClusters)
             * smoothstep(0.48, 0.86, patchMask) * grazingShine;
+          #else
+          vec3 simpleSunNormal = normalize(analyticalNormal);
+          vec3 simpleSunDirection = normalize(sunDirection);
+          vec3 simpleViewDirection = normalize(viewDirection);
+          float simpleSunFacing = max(dot(simpleSunNormal, simpleSunDirection), 0.0);
+          vec3 simpleReflectedSun = normalize(reflect(-simpleSunDirection, simpleSunNormal));
+          float simpleSunAlignment = clamp(dot(simpleReflectedSun, simpleViewDirection), 0.0, 1.0);
+          float primarySunLobe = pow(simpleSunAlignment, mix(14.0, 3.0, sunReflectionWidth));
+          float macroSunReflection = primarySunLobe
+            * smoothstep(0.0, 0.08, simpleSunFacing)
+            * 0.01744;
+          float patchMask = 1.0;
+          float streakBreakup = 1.0;
+          float grazingShine = 0.18 + fresnel * 0.82;
+          float waveGatedSunReflection = macroSunReflection;
+          float softHighlight = macroSunReflection * (0.45 + fresnel * 0.55);
+          float sharpHighlight = 0.0;
+          #endif
           vec3 skyReflectionDirection = reflect(-viewDirection, surfaceNormal);
           float reflectedSkyHeight = smoothstep(0.04, 0.82, clamp(skyReflectionDirection.y, 0.0, 1.0));
           vec3 skyHorizonColor = vec3(0.333, 0.722, 0.949) * skyHorizonInfluence;
           vec3 skyTopColor = vec3(0.086, 0.518, 0.875) * skyTopInfluence;
           vec3 reflectedSkyColor = mix(skyHorizonColor, skyTopColor, reflectedSkyHeight);
           float reflectedCloudMask = 0.0;
+          #if defined(WATER_QUALITY_MEDIUM)
+          for (int i = 0; i < 3; i++) {
+            if (i >= cloudCount) break;
+            vec3 cloudOffset = cloudData[i].xyz - vWorldPosition;
+            float inverseCloudDistance = inversesqrt(max(dot(cloudOffset, cloudOffset), 0.0001));
+            vec3 cloudDirection = cloudOffset * inverseCloudDistance;
+            vec3 cloudHorizontal = vec3(cloudOrientations[i].x, 0.0, cloudOrientations[i].y);
+            vec3 cloudVertical = normalize(cross(cloudHorizontal, cloudDirection));
+            vec2 angularSize = max(cloudData[i].w * vec2(8.0, 4.0) * inverseCloudDistance,
+              vec2(0.004));
+            vec2 angularOffset = vec2(dot(skyReflectionDirection, cloudHorizontal),
+              dot(skyReflectionDirection, cloudVertical)) / angularSize;
+            vec2 bodyCoord = angularOffset * vec2(0.92, 1.45);
+            float bodyMask = 1.0 - smoothstep(0.42, 1.0, dot(bodyCoord, bodyCoord));
+            float centerAlignment = dot(skyReflectionDirection, cloudDirection);
+            float cloudMask = bodyMask * smoothstep(0.95, 0.995, centerAlignment);
+            reflectedCloudMask = max(reflectedCloudMask, cloudMask);
+          }
+          #elif defined(WATER_QUALITY_FULL)
           for (int i = 0; i < ${MAX_REFLECTED_CLOUDS}; i++) {
             if (i >= cloudCount) break;
             vec3 cloudOffset = cloudData[i].xyz - vWorldPosition;
@@ -389,8 +478,13 @@ export class PoolWater {
               * smoothstep(0.95, 0.995, centerAlignment);
             reflectedCloudMask = max(reflectedCloudMask, cloudMask);
           }
+          #endif
           float shoreline = 1.0 - smoothstep(0.012, 0.052, abs(1.0 - roundedEdge));
+          #if defined(WATER_QUALITY_LOW)
+          shoreline *= smoothstep(-0.55, 0.65, sin(dot(p, vec2(3.1, 2.7)) + time * 0.22));
+          #else
           shoreline *= smoothstep(-0.55, 0.65, sin(cellsUv.x * 0.43 + cellsUv.y * 0.37 + time * 0.22));
+          #endif
           float surfaceDetail = mix(0.68, 1.0, depth);
           float slopePatches = 0.28 + patchMask * 0.72;
           float litSlope = max(slopeLight, 0.0) * surfaceDetail * slopePatches;
@@ -425,7 +519,13 @@ export class PoolWater {
           if (debugView == 2) { gl_FragColor = vec4(vec3(clamp(primary + secondary + focus, 0.0, 1.0)), 1.0); return; }
           if (debugView == 3) { gl_FragColor = vec4(vec3(colorDepth), 1.0); return; }
           if (debugView == 4) {
+            #if defined(WATER_QUALITY_FULL)
             gl_FragColor = vec4(fract(vec3(cellsUv.x, cellsUv.y, fineUv.x)), 1.0);
+            #elif defined(WATER_QUALITY_MEDIUM)
+            gl_FragColor = vec4(fract(vec3(cellsUv.x, cellsUv.y, cellsUv.x)), 1.0);
+            #else
+            gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+            #endif
             return;
           }
           if (debugView == 5) { gl_FragColor = vec4(vec3(waveGatedSunReflection), 1.0); return; }
@@ -561,6 +661,18 @@ export class PoolWater {
     };
     document.addEventListener('keydown', this.waterDebugKeyHandler, true);
   }
+
+  setQuality(quality) {
+    const next = WATER_QUALITY_VARIANTS[quality] ? quality : 'high';
+    const nextVariant = WATER_QUALITY_VARIANTS[next];
+    this.quality = next;
+    if (nextVariant === this.qualityVariant) return false;
+    this.qualityVariant = nextVariant;
+    this.waterMaterial.defines = { [`WATER_QUALITY_${nextVariant}`]: 1 };
+    this.waterMaterial.needsUpdate = true;
+    return true;
+  }
+
   update(dt) {
     if (this.waterMaterial) this.waterMaterial.uniforms.time.value += dt;
     if (this.fpsDisplay && Number.isFinite(dt) && dt > 0) {
