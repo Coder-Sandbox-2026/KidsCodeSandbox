@@ -68,6 +68,7 @@ export class SceneManager {
     this.sun.shadow.camera.bottom = -d;
     this.sun.shadow.normalBias = 0.025;
     this.scene.add(this.sun);
+    this.renderer.setShadowLight?.(this.sun);
 
     // Small emissive sun sphere (for bloom glow)
     const sunGeo = new THREE.SphereGeometry(3, 16, 16);

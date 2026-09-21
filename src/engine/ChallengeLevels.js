@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { ChallengeLevel1 } from './ChallengeLevel1.js';
-import { Level12Water } from './Level12Water.js';
+import { PoolWater } from './PoolWater.js';
 
 const COLORS = [0x00bed3, 0xffca28, 0xf06449, 0x9155d9, 0x3284e8];
 
@@ -274,11 +274,23 @@ export class ChallengeLevel12 extends ChallengeEnvironment {
       edge.name = 'poolBank';
     }
 
-    this.water = new Level12Water({
+    this.water = new PoolWater({
       createMesh: (...args) => this._mesh(...args),
       centerX, centerZ, width, depth, surfaceY,
-      sunWorldPosition: this.sunWorldPosition,
+      sunlight: {
+        position: this.sunWorldPosition,
+        reflection: true,
+        waveLighting: true,
+      },
+      skyReflection: true,
+      cloudReflection: {
+        enabled: true,
+        clouds: this._getCloudDescriptors(),
+      },
+      caustics: true,
       rippleCenters: [[-13.8, 2.0], [12.8, -2.7], [-9.6, -8.8]],
+      debug: true,
+      fpsDebug: true,
     });
     this.waterSurface = this.water.object3D;
 

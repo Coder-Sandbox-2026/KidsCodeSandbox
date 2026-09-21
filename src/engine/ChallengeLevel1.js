@@ -17,6 +17,7 @@ export class ChallengeLevel1 {
     this.environment = 'day';
     this.meshes = [];
     this.physicsBodies = [];
+    this.cloudDescriptors = null;
   }
 
   _mesh(geometry, material, x, y, z, scale = [1, 1, 1]) {
@@ -94,12 +95,8 @@ export class ChallengeLevel1 {
 
     // Four clouds, five shared rounded lobes each, batched into one draw.
     const lobes = [];
-    const cloudCenters = [[-55, 35, -100, 1.1], [0, 30, -125, 0.8], [75, 40, -100, 1.3], [-95, 38, 35, 1]];
-    const centers = this.environment === 'earlyDawn'
-      ? [...cloudCenters, [105, 32, 65, 0.9]]
-      : this.environment === 'night' ? cloudCenters.slice(0, 2) : cloudCenters;
-    for (const [x, y, z, size] of centers) {
-      const angle = Math.atan2(x, z);
+    const centers = this._getCloudDescriptors();
+    for (const { position: [x, y, z], scale: size, angle } of centers) {
       for (const [dx, dy, w, h] of [[-6, 0, 5, 3], [-2, 1, 5, 4], [1, 4, 5.5, 6], [5, 0.5, 5, 3.5], [0, -1, 8, 2.5]]) {
         lobes.push([x + dx * size * Math.cos(angle), y + dy * size, z - dx * size * Math.sin(angle), w * size, h * size, 3 * size, angle]);
       }
@@ -107,6 +104,22 @@ export class ChallengeLevel1 {
     const clouds = this._terrainInstances('distantClouds', this.resources.cloudMaterial(this.environment), lobes, this.resources.scenery('cloud'));
     clouds.receiveShadow = false;
     clouds.userData.cloudCount = centers.length;
+  }
+
+  _getCloudDescriptors() {
+    if (this.cloudDescriptors) return this.cloudDescriptors;
+    const cloudCenters = [[-55, 35, -100, 1.1], [0, 30, -125, 0.8], [75, 40, -100, 1.3], [-95, 38, 35, 1]];
+    const centers = this.environment === 'earlyDawn'
+      ? [...cloudCenters, [105, 32, 65, 0.9]]
+      : this.environment === 'night' ? cloudCenters.slice(0, 2) : cloudCenters;
+    this.cloudDescriptors = centers.map(([x, y, z, scale]) => {
+      const angle = Math.atan2(x, z);
+      return Object.freeze({
+        position: Object.freeze([x, y, z]), scale, angle,
+        orientation: Object.freeze([Math.cos(angle), -Math.sin(angle)]),
+      });
+    });
+    return this.cloudDescriptors;
   }
 
   build() {
@@ -183,6 +196,7 @@ export class ChallengeLevel1 {
     for (const body of this.physicsBodies) this.physics.world.removeRigidBody(body);
     this.meshes = [];
     this.physicsBodies = [];
+    this.cloudDescriptors = null;
     // All geometry/materials belong to EnvironmentResources and survive unload.
   }
 }

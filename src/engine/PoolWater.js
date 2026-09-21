@@ -1,28 +1,30 @@
 import * as THREE from 'three';
 
 const waterCausticsUrl = new URL('../assets/textures/water-caustics.png', import.meta.url).href;
-const LEVEL_12_WATER_DEBUG = true;
-const LEVEL_12_FPS_DEBUG = true;
+const POOL_WATER_DEBUG = false;
+const POOL_WATER_FPS_DEBUG = false;
+const MAX_REFLECTED_CLOUDS = 10;
 
-const LEVEL_12_WATER_DEFAULTS = Object.freeze({
+const POOL_WATER_DEFAULTS = Object.freeze({
   largeWaveHeight: 0.035, largeWaveFrequency: 0.8, largeWaveSpeed: 0.8,
   mediumWaveHeight: 0.042, mediumWaveFrequency: 1.65, mediumWaveSpeed: 1.00,
   microRippleStrength: 0.08, microRippleFrequency: 0.91, microRippleSpeed: 2.0,
   waveWarpStrength: 0.5, fresnelStrength: 0.25, fresnelPower: 5.0,
-  slopeLightStrength: 1.4, slopeDarkeningStrength: 1.0,
-  softSpecularStrength: 0.32, sharpGlintStrength: 1.2, specularSharpness: 60,
+  slopeLightStrength: 1.4, slopeDarkeningStrength: 1.0, sunlitWaveStrength: 0.105,
+  softSpecularStrength: 0.59, sharpGlintStrength: 1.2, specularSharpness: 74,
   crestHighlightStrength: 0.38, shallowAlpha: 0.08, deepAlpha: 0.98,
-  skyReflectionStrength: 0.18, skyHorizonInfluence: 1.0, skyTopInfluence: 0.80,
-  sunReflectionStrength: 1.0, sunReflectionWidth: 0.82, sunReflectionLength: 0.82,
+  skyReflectionStrength: 0, skyHorizonInfluence: 1.0, skyTopInfluence: 0.80,
+  cloudReflectionStrength: 0.12,
+  sunReflectionStrength: 9.4, sunReflectionWidth: 0, sunReflectionLength: 0.83,
   sunGlintWarmth: 0.65,
   shallowAquaStrength: 0.145, deepBlueStrength: 1.0,
   depthTransitionWidth: 0.86, depthTransitionBias: 0.05,
   causticStrength: 1.0, causticScale: 0.6, causticSpeed: 1.0, causticWarp: 1.0,
   causticShallowFalloff: 0.16, causticDeepAttenuation: 0.025,
-  rockRippleStrength: 0.25, rippleWidth: 0.002, rippleExpansionSpeed: 0.1,
+  rockRippleStrength: 0.15, rippleWidth: 0.006, rippleExpansionSpeed: 0.06,
 });
 
-const LEVEL_12_WATER_CONTROLS = [
+const POOL_WATER_CONTROLS = [
   ['Waves', 'largeWaveHeight', 'Large Wave Height', 0, 0.035, 0.001],
   ['Waves', 'largeWaveFrequency', 'Large Wave Frequency', 0.15, 0.8, 0.01],
   ['Waves', 'largeWaveSpeed', 'Large Wave Speed', 0, 0.8, 0.01],
@@ -37,6 +39,7 @@ const LEVEL_12_WATER_CONTROLS = [
   ['Lighting', 'fresnelPower', 'Fresnel Power', 1, 5, 0.05],
   ['Lighting', 'slopeLightStrength', 'Slope Light Strength', 0, 1.4, 0.02],
   ['Lighting', 'slopeDarkeningStrength', 'Slope Darkening', 0, 1.0, 0.02],
+  ['Lighting', 'sunlitWaveStrength', 'Sunlit Wave Strength', 0, 0.25, 0.005],
   ['Lighting', 'softSpecularStrength', 'Soft Specular', 0, 0.7, 0.01],
   ['Lighting', 'sharpGlintStrength', 'Sharp Glint', 0, 1.2, 0.02],
   ['Lighting', 'specularSharpness', 'Specular Sharpness', 24, 128, 1],
@@ -44,6 +47,7 @@ const LEVEL_12_WATER_CONTROLS = [
   ['Reflection', 'skyReflectionStrength', 'Sky Reflection Strength', 0, 0.4, 0.01],
   ['Reflection', 'skyHorizonInfluence', 'Sky Horizon Influence', 0, 1.5, 0.02],
   ['Reflection', 'skyTopInfluence', 'Sky Top Influence', 0, 1.5, 0.02],
+  ['Reflection', 'cloudReflectionStrength', 'Cloud Reflection Strength', 0, 2, 0.01],
   ['Reflection', 'sunReflectionStrength', 'Sun Reflection Strength', 0, 100, 0.1],
   ['Reflection', 'sunReflectionWidth', 'Sun Reflection Width', 0, 1, 0.01],
   ['Reflection', 'sunReflectionLength', 'Sun Reflection Length', 0, 1, 0.01],
@@ -65,16 +69,42 @@ const LEVEL_12_WATER_CONTROLS = [
   ['Rock ripples', 'rippleExpansionSpeed', 'Ripple Expansion Speed', 0.01, 0.1, 0.005],
 ];
 
-export class Level12Water {
-  constructor({ createMesh, centerX, centerZ, width, depth, surfaceY, sunWorldPosition, rippleCenters }) {
+export class PoolWater {
+  constructor({
+    createMesh, centerX, centerZ, width, depth, surfaceY,
+    sunlight = null, skyReflection = true, cloudReflection = null,
+    caustics = true, rippleCenters = [],
+    debug = POOL_WATER_DEBUG, fpsDebug = POOL_WATER_FPS_DEBUG,
+  }) {
+    this.debug = debug;
+    this.fpsDebug = fpsDebug;
     const rippleSeeds = [0.3, 1.7, 2.8];
     const rippleCalls = rippleCenters.map(([x, z], index) => {
       const u = (x / (width - 0.3) + 0.5).toFixed(3);
       const v = (-z / (depth - 0.3) + 0.5).toFixed(3);
-      return `rockRipples(vUv, vec2(${u}, ${v}), ${rippleSeeds[index]})`;
-    }).join('\n            + ');
+      const seed = rippleSeeds[index] ?? (0.3 + index * 1.1);
+      return `rockRipples(vUv, vec2(${u}, ${v}), ${seed.toFixed(3)})`;
+    }).join('\n            + ') || '0.0';
 
-    this.waterGeometry = new THREE.PlaneGeometry(width - 0.3, depth - 0.3, 32, 24);
+    const sunlightPosition = sunlight?.position;
+    const sunlightEnabled = sunlightPosition ? 1 : 0;
+    const sunReflectionEnabled = sunlightPosition && sunlight.reflection !== false ? 1 : 0;
+    const sunWaveLightingEnabled = sunlightPosition && sunlight.waveLighting !== false ? 1 : 0;
+    const waterWidth = width - 0.3;
+    const waterDepth = depth - 0.3;
+    const cloudReflectionEnabled = !!cloudReflection && cloudReflection.enabled !== false;
+    const suppliedClouds = cloudReflectionEnabled ? cloudReflection.clouds ?? [] : [];
+    const reflectedClouds = suppliedClouds.slice(0, MAX_REFLECTED_CLOUDS);
+    const cloudData = Array.from({ length: MAX_REFLECTED_CLOUDS }, () => new THREE.Vector4());
+    const cloudOrientations = Array.from({ length: MAX_REFLECTED_CLOUDS }, () => new THREE.Vector2(1, 0));
+    reflectedClouds.forEach(({ position, scale = 1, angle = 0, orientation }, index) => {
+      cloudData[index].set(position[0], position[1], position[2], scale);
+      if (orientation) cloudOrientations[index].set(orientation[0], orientation[1]);
+      else cloudOrientations[index].set(Math.cos(angle), -Math.sin(angle));
+    });
+    this.cloudDescriptors = suppliedClouds;
+
+    this.waterGeometry = new THREE.PlaneGeometry(waterWidth, waterDepth, 32, 24);
     this.waterCausticsTexture = new THREE.Texture();
     this.waterCausticsTexture.wrapS = this.waterCausticsTexture.wrapT = THREE.RepeatWrapping;
     this.waterCausticsTexture.minFilter = THREE.LinearFilter;
@@ -97,11 +127,23 @@ export class Level12Water {
       side: THREE.DoubleSide,
       uniforms: {
         time: { value: 0 }, causticsMap: { value: this.waterCausticsTexture }, debugView: { value: 0 },
-        ...Object.fromEntries(Object.entries(LEVEL_12_WATER_DEFAULTS).map(([key, value]) => [key, { value }])),
+        ...Object.fromEntries(Object.entries(POOL_WATER_DEFAULTS).map(([key, value]) => [key, { value }])),
         inverseProjectionMatrix: { value: new THREE.Matrix4() },
         cameraWorldMatrix: { value: new THREE.Matrix4() },
         waterViewport: { value: new THREE.Vector4(0, 0, 1, 1) },
-        sunWorldPosition: { value: sunWorldPosition ?? new THREE.Vector3() },
+        waterCenter: { value: new THREE.Vector2(centerX, centerZ) },
+        waterSize: { value: new THREE.Vector2(waterWidth, waterDepth) },
+        waterSurfaceY: { value: surfaceY },
+        sunlightEnabled: { value: sunlightEnabled },
+        sunReflectionEnabled: { value: sunReflectionEnabled },
+        sunWaveLightingEnabled: { value: sunWaveLightingEnabled },
+        skyReflectionEnabled: { value: skyReflection ? 1 : 0 },
+        cloudReflectionEnabled: { value: cloudReflectionEnabled ? 1 : 0 },
+        cloudCount: { value: reflectedClouds.length },
+        cloudData: { value: cloudData },
+        cloudOrientations: { value: cloudOrientations },
+        causticsEnabled: { value: caustics ? 1 : 0 },
+        sunWorldPosition: { value: sunlightPosition ?? new THREE.Vector3() },
       },
       vertexShader: `
         uniform float time;
@@ -145,13 +187,22 @@ export class Level12Water {
         uniform int debugView;
         uniform mat4 inverseProjectionMatrix, cameraWorldMatrix;
         uniform vec4 waterViewport;
+        uniform vec2 waterCenter, waterSize;
+        uniform float waterSurfaceY;
+        uniform float sunlightEnabled, sunReflectionEnabled, sunWaveLightingEnabled;
+        uniform float skyReflectionEnabled, cloudReflectionEnabled, causticsEnabled;
+        uniform int cloudCount;
+        uniform vec4 cloudData[${MAX_REFLECTED_CLOUDS}];
+        uniform vec2 cloudOrientations[${MAX_REFLECTED_CLOUDS}];
         uniform vec3 sunWorldPosition;
         uniform float largeWaveHeight, largeWaveFrequency, largeWaveSpeed;
         uniform float mediumWaveHeight, mediumWaveFrequency, mediumWaveSpeed, waveWarpStrength;
         uniform float microRippleStrength, microRippleFrequency, microRippleSpeed;
         uniform float fresnelStrength, fresnelPower, slopeLightStrength, slopeDarkeningStrength;
+        uniform float sunlitWaveStrength;
         uniform float softSpecularStrength, sharpGlintStrength, specularSharpness, crestHighlightStrength;
         uniform float skyReflectionStrength, skyHorizonInfluence, skyTopInfluence;
+        uniform float cloudReflectionStrength;
         uniform float sunReflectionStrength, sunReflectionWidth, sunReflectionLength, sunGlintWarmth;
         uniform float shallowAlpha, deepAlpha, shallowAquaStrength, deepBlueStrength;
         uniform float depthTransitionWidth, depthTransitionBias;
@@ -163,7 +214,7 @@ export class Level12Water {
         varying vec3 vWorldPosition;
         varying vec3 vWorldNormal;
         float rockRipples(vec2 uv, vec2 center, float seed) {
-          vec2 offset = (uv - center) * vec2(1.42, 1.0);
+          vec2 offset = (uv - center) * vec2(waterSize.x / waterSize.y, 1.0);
           float angle = atan(offset.y, offset.x);
           float radius = length(offset) + sin(angle * 5.0 + time * 0.43 + seed) * 0.0035;
           float rings = 0.0;
@@ -175,7 +226,8 @@ export class Level12Water {
           return rings * (1.0 - smoothstep(0.07, 0.14, radius));
         }
         void main() {
-          vec2 p = (vUv - 0.5) * vec2(1.42, 1.0);
+          vec2 waterAspect = vec2(waterSize.x / waterSize.y, 1.0);
+          vec2 p = (vUv - 0.5) * waterAspect;
           vec2 warp = vec2(
             sin(dot(p, vec2(8.0, 5.0)) + sin(time * 0.31) + time * 0.23),
             sin(dot(p, vec2(-5.0, 9.0)) + cos(time * 0.27) - time * 0.19)
@@ -190,11 +242,11 @@ export class Level12Water {
           vec2 screenUv = (gl_FragCoord.xy - waterViewport.xy) / waterViewport.zw;
           vec4 viewRay = inverseProjectionMatrix * vec4(screenUv * 2.0 - 1.0, 1.0, 1.0);
           vec3 rayDirection = normalize((cameraWorldMatrix * vec4(viewRay.xyz / viewRay.w, 0.0)).xyz);
-          float rayPlaneDistance = (1.05 - cameraPosition.y) / rayDirection.y;
+          float rayPlaneDistance = (waterSurfaceY - cameraPosition.y) / rayDirection.y;
           vec3 planarWorldPosition = cameraPosition + rayDirection * rayPlaneDistance;
-          vec2 planarUv = vec2(planarWorldPosition.x / 33.7 + 0.5,
-            -(planarWorldPosition.z + 22.0) / 23.7 + 0.5);
-          vec2 causticP = (planarUv - 0.5) * vec2(1.42, 1.0);
+          vec2 planarUv = vec2((planarWorldPosition.x - waterCenter.x) / waterSize.x + 0.5,
+            -(planarWorldPosition.z - waterCenter.y) / waterSize.y + 0.5);
+          vec2 causticP = (planarUv - 0.5) * waterAspect;
           vec2 causticDomainWarp = vec2(
             sin(dot(causticP, vec2(7.3, 4.7)) + time * 0.19),
             cos(dot(causticP, vec2(-4.4, 8.1)) - time * 0.16)
@@ -230,7 +282,7 @@ export class Level12Water {
             + time * 2.05 * microRippleSpeed + rippleWarpA * 1.35;
           float ripplePhaseB = dot(vUv, vec2(-43.0, 137.0) * microRippleFrequency)
             - time * 1.72 * microRippleSpeed + rippleWarpB * 1.20;
-          vec2 waterPosition = (vUv - 0.5) * vec2(33.7, 23.7);
+          vec2 waterPosition = (vUv - 0.5) * waterSize;
           vec2 directionA = normalize(vec2(0.86, 0.51));
           vec2 directionB = normalize(vec2(-0.62, 0.78));
           vec2 directionC = normalize(vec2(0.50, -0.87));
@@ -266,17 +318,23 @@ export class Level12Water {
           float shallowCaustics = mix(1.45, 0.62, smoothstep(0.06, 0.70, depth));
           float causticVisibilityStrength = causticVisibility * shallowCaustics;
           float cellInterior = (1.0 - smoothstep(0.24, 0.48, textureA))
-            * (1.0 - smoothstep(0.28, 0.82, depth)) * causticVisibility;
+            * (1.0 - smoothstep(0.28, 0.82, depth)) * causticVisibility * causticsEnabled;
           color *= 1.0 - cellInterior * 0.12;
           vec3 causticLight = vec3(0.48, 0.88, 0.78) * primary * 0.105;
           causticLight += vec3(0.96, 0.91, 0.72) * secondary * 0.16;
           causticLight += vec3(1.00, 0.97, 0.86) * focus * 0.28;
-          causticLight *= causticVisibilityStrength * causticStrength;
+          causticLight *= causticVisibilityStrength * causticStrength * causticsEnabled;
           float ripples = ${rippleCalls};
           color += vec3(0.62, 0.96, 1.0) * ripples * rockRippleStrength;
           color += vec3(0.30, 0.84, 0.92) * smoothstep(0.08, 0.48, ripples) * 0.08;
-          vec3 sunDirection = normalize(sunWorldPosition - vWorldPosition);
+          vec3 sunOffset = sunWorldPosition - vWorldPosition;
+          float sunDistance = length(sunOffset);
+          vec3 sunDirection = sunlightEnabled > 0.5 && sunDistance > 0.0001
+            ? sunOffset / sunDistance : vec3(0.0, 1.0, 0.0);
           float sunFacing = dot(surfaceNormal, sunDirection);
+          float flatSunFacing = max(sunDirection.y, 0.0);
+          float sunlitWave = smoothstep(flatSunFacing + 0.01, flatSunFacing + 0.075,
+            max(dot(analyticalNormal, sunDirection), 0.0));
           float broadReflectedSun = max(dot(reflect(-sunDirection, analyticalNormal), viewDirection), 0.0);
           float reflectedSun = max(dot(reflect(-sunDirection, surfaceNormal), viewDirection), 0.0);
           float focusedSunResponse = pow(broadReflectedSun, mix(14.0, 3.0, sunReflectionWidth));
@@ -308,6 +366,29 @@ export class Level12Water {
           vec3 skyHorizonColor = vec3(0.333, 0.722, 0.949) * skyHorizonInfluence;
           vec3 skyTopColor = vec3(0.086, 0.518, 0.875) * skyTopInfluence;
           vec3 reflectedSkyColor = mix(skyHorizonColor, skyTopColor, reflectedSkyHeight);
+          float reflectedCloudMask = 0.0;
+          for (int i = 0; i < ${MAX_REFLECTED_CLOUDS}; i++) {
+            if (i >= cloudCount) break;
+            vec3 cloudOffset = cloudData[i].xyz - vWorldPosition;
+            float inverseCloudDistance = inversesqrt(max(dot(cloudOffset, cloudOffset), 0.0001));
+            vec3 cloudDirection = cloudOffset * inverseCloudDistance;
+            vec3 cloudHorizontal = vec3(cloudOrientations[i].x, 0.0, cloudOrientations[i].y);
+            vec3 cloudVertical = normalize(cross(cloudHorizontal, cloudDirection));
+            vec2 angularSize = max(cloudData[i].w * vec2(8.0, 4.0) * inverseCloudDistance,
+              vec2(0.004));
+            vec2 angularOffset = vec2(dot(skyReflectionDirection, cloudHorizontal),
+              dot(skyReflectionDirection, cloudVertical)) / angularSize;
+            vec2 bodyCoord = angularOffset * vec2(0.92, 1.45);
+            vec2 leftCoord = (angularOffset - vec2(-0.38, -0.34)) * vec2(1.48, 0.94);
+            vec2 rightCoord = (angularOffset - vec2(0.38, -0.30)) * vec2(1.52, 0.98);
+            float bodyMask = 1.0 - smoothstep(0.42, 1.0, dot(bodyCoord, bodyCoord));
+            float leftMask = 1.0 - smoothstep(0.42, 1.0, dot(leftCoord, leftCoord));
+            float rightMask = 1.0 - smoothstep(0.42, 1.0, dot(rightCoord, rightCoord));
+            float centerAlignment = dot(skyReflectionDirection, cloudDirection);
+            float cloudMask = max(bodyMask, max(leftMask, rightMask))
+              * smoothstep(0.95, 0.995, centerAlignment);
+            reflectedCloudMask = max(reflectedCloudMask, cloudMask);
+          }
           float shoreline = 1.0 - smoothstep(0.012, 0.052, abs(1.0 - roundedEdge));
           shoreline *= smoothstep(-0.55, 0.65, sin(cellsUv.x * 0.43 + cellsUv.y * 0.37 + time * 0.22));
           float surfaceDetail = mix(0.68, 1.0, depth);
@@ -316,19 +397,25 @@ export class Level12Water {
           float darkSlope = max(-slopeLight, 0.0) * surfaceDetail * (0.45 + (1.0 - patchMask) * 0.55);
           float shallowSurface = (1.0 - smoothstep(0.10, 0.58, depth))
             * (0.30 + patchMask * 0.70) * (0.35 + max(slopeLight, 0.0) * 0.65);
-          color *= 0.96 + max(sunFacing, 0.0) * 0.045
+          color *= 0.96 + max(sunFacing, 0.0) * 0.045 * sunWaveLightingEnabled
             + litSlope * slopeLightStrength - darkSlope * slopeDarkeningStrength;
           color = mix(color, color * vec3(0.76, 0.87, 0.99), clamp(darkSlope * 1.8, 0.0, 0.24));
           color += vec3(0.18, 0.76, 0.94) * litSlope * 0.54;
           color += vec3(0.08, 0.66, 0.72) * shallowSurface * shallowAquaStrength;
           color += vec3(0.72, 0.94, 1.00) * crestLight * streakBreakup * grazingShine
             * (0.05 + max(slopeLight, 0.0) * crestHighlightStrength);
-          color += reflectedSkyColor * fresnel * skyReflectionStrength * (0.65 + broadShine * 0.35);
+          color += reflectedSkyColor * fresnel * skyReflectionStrength * skyReflectionEnabled
+            * (0.65 + broadShine * 0.35);
+          color += vec3(0.78, 0.88, 0.95) * reflectedCloudMask * fresnel
+            * cloudReflectionStrength * cloudReflectionEnabled;
           vec3 sunlightColor = vec3(1.00, 0.953, 0.886);
+          color += sunlightColor * sunlitWave * sunlitWaveStrength * sunWaveLightingEnabled;
           vec3 softSunColor = mix(vec3(0.62, 0.88, 1.00), sunlightColor, sunGlintWarmth);
           vec3 sharpSunColor = mix(vec3(1.00, 0.98, 0.90), sunlightColor, sunGlintWarmth);
-          color += softSunColor * softHighlight * softSpecularStrength * sunReflectionStrength;
-          color += sharpSunColor * sharpHighlight * sharpGlintStrength * sunReflectionStrength;
+          color += softSunColor * softHighlight * softSpecularStrength * sunReflectionStrength
+            * sunReflectionEnabled;
+          color += sharpSunColor * sharpHighlight * sharpGlintStrength * sunReflectionStrength
+            * sunReflectionEnabled;
           color += vec3(0.30, 0.58, 0.74) * (0.04 + shimmer * (0.025 + fresnel * 0.08));
           color += vec3(0.46, 0.94, 0.96) * shoreline * 0.12;
           float alphaDepth = smoothstep(0.08, 0.96, colorDepth);
@@ -343,6 +430,7 @@ export class Level12Water {
           }
           if (debugView == 5) { gl_FragColor = vec4(vec3(waveGatedSunReflection), 1.0); return; }
           if (debugView == 6) { gl_FragColor = vec4(vec3(max(softHighlight, sharpHighlight)), 1.0); return; }
+          if (debugView == 7) { gl_FragColor = vec4(vec3(reflectedCloudMask), 1.0); return; }
           gl_FragColor = vec4(color * alpha + causticLight, alpha);
         }
       `,
@@ -364,13 +452,12 @@ export class Level12Water {
   }
 
   _createFpsDisplay() {
-    if (!LEVEL_12_FPS_DEBUG || typeof document === 'undefined'
+    if (!this.fpsDebug || typeof document === 'undefined'
       || typeof document.getElementById !== 'function') return;
     const host = document.getElementById('viewport-pane');
     if (!host) return;
-    host.querySelector('[data-level12-fps]')?.remove();
     const display = document.createElement('div');
-    display.dataset.level12Fps = '';
+    display.dataset.poolWaterFps = '';
     display.textContent = 'FPS: --';
     display.style.cssText = 'position:absolute;left:10px;top:10px;z-index:10000;padding:5px 8px;color:#dff;font:bold 13px/1 monospace;background:rgba(5,24,38,.78);border:1px solid rgba(130,225,255,.4);border-radius:4px;pointer-events:none;';
     host.appendChild(display);
@@ -380,19 +467,19 @@ export class Level12Water {
   }
 
   _createWaterDebugPanel() {
-    if (!LEVEL_12_WATER_DEBUG || typeof document === 'undefined'
+    if (!this.debug || typeof document === 'undefined'
       || typeof document.getElementById !== 'function') return;
     const host = document.getElementById('viewport-pane');
     if (!host) return;
     this.waterDebugPanel?.remove();
     const panel = document.createElement('div');
-    panel.dataset.level12WaterDebug = '';
+    panel.dataset.poolWaterDebug = '';
     panel.style.cssText = 'position:absolute;right:10px;top:10px;z-index:10000;width:260px;max-height:calc(100% - 20px);overflow:auto;padding:8px;color:#def;font:11px/1.25 monospace;background:rgba(5,24,38,.88);border:1px solid rgba(130,225,255,.45);border-radius:6px;box-shadow:0 3px 16px #0018;pointer-events:auto;';
     panel.addEventListener('pointerdown', event => event.stopPropagation());
     panel.addEventListener('click', event => event.stopPropagation());
     const header = document.createElement('div');
     header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;font-weight:bold;margin-bottom:6px;';
-    header.textContent = 'Level 12 Water Debug';
+    header.textContent = 'Pool Water Debug';
     const collapse = document.createElement('button');
     collapse.type = 'button';
     collapse.textContent = '−';
@@ -405,14 +492,14 @@ export class Level12Water {
       const collapsed = contents.hidden = !contents.hidden;
       collapse.textContent = collapsed ? '+' : '−';
       panel.style.width = collapsed ? 'auto' : '260px';
-      header.firstChild.textContent = collapsed ? 'Water Debug' : 'Level 12 Water Debug';
+      header.firstChild.textContent = collapsed ? 'Water Debug' : 'Pool Water Debug';
     });
 
     const viewRow = document.createElement('label');
     viewRow.textContent = 'View: ';
     const view = document.createElement('select');
     for (const [label, value] of [['Final', 0], ['Surface Normal', 1], ['Caustics', 2], ['Depth', 3],
-      ['Caustic UV', 4], ['Sun Reflection', 5], ['Sun Reflection Masked', 6]]) {
+      ['Caustic UV', 4], ['Sun Reflection', 5], ['Sun Reflection Masked', 6], ['Cloud Mask', 7]]) {
       const option = document.createElement('option'); option.textContent = label; option.value = value; view.appendChild(option);
     }
     view.addEventListener('change', () => { this.waterMaterial.uniforms.debugView.value = Number(view.value); });
@@ -424,7 +511,7 @@ export class Level12Water {
 
     let group = '';
     const valueNodes = new Map();
-    for (const [nextGroup, key, label, min, max, step] of LEVEL_12_WATER_CONTROLS) {
+    for (const [nextGroup, key, label, min, max, step] of POOL_WATER_CONTROLS) {
       if (nextGroup !== group) {
         group = nextGroup;
         const title = document.createElement('div'); title.textContent = group;
@@ -434,7 +521,7 @@ export class Level12Water {
       row.style.cssText = 'display:grid;grid-template-columns:1fr 88px 44px;gap:4px;align-items:center;margin:2px 0;';
       const name = document.createElement('span'); name.textContent = label;
       const input = document.createElement('input'); input.type = 'range'; input.min = min; input.max = max; input.step = step;
-      input.value = LEVEL_12_WATER_DEFAULTS[key];
+      input.value = POOL_WATER_DEFAULTS[key];
       const output = document.createElement('output'); output.textContent = Number(input.value).toFixed(step < 0.01 ? 3 : 2);
       input.addEventListener('input', () => {
         const value = Number(input.value); this.waterMaterial.uniforms[key].value = value;
@@ -445,16 +532,16 @@ export class Level12Water {
     const actions = document.createElement('div'); actions.style.cssText = 'display:flex;gap:6px;margin-top:8px;';
     const reset = document.createElement('button'); reset.type = 'button'; reset.textContent = 'Reset Water Values';
     reset.addEventListener('click', () => {
-      for (const [key, value] of Object.entries(LEVEL_12_WATER_DEFAULTS)) {
+      for (const [key, value] of Object.entries(POOL_WATER_DEFAULTS)) {
         this.waterMaterial.uniforms[key].value = value;
         const [input, output, step] = valueNodes.get(key); input.value = value; output.textContent = value.toFixed(step < 0.01 ? 3 : 2);
       }
     });
     const copy = document.createElement('button'); copy.type = 'button'; copy.textContent = 'Copy Values';
     copy.addEventListener('click', async () => {
-      const values = Object.fromEntries(Object.keys(LEVEL_12_WATER_DEFAULTS).map(key => [key, this.waterMaterial.uniforms[key].value]));
+      const values = Object.fromEntries(Object.keys(POOL_WATER_DEFAULTS).map(key => [key, this.waterMaterial.uniforms[key].value]));
       const text = JSON.stringify(values);
-      try { await navigator.clipboard.writeText(text); } catch { console.info('Level 12 water values:', values); }
+      try { await navigator.clipboard.writeText(text); } catch { console.info('Pool water values:', values); }
     });
     actions.append(reset, copy); contents.appendChild(actions);
     host.appendChild(panel);
@@ -507,6 +594,7 @@ export class Level12Water {
     this.waterGeometry = null;
     this.waterMaterial = null;
     this.waterCausticsTexture = null;
+    this.cloudDescriptors = null;
     this.object3D = null;
   }
 }

@@ -83,7 +83,9 @@ function renderBody(body, store, category, navigate) {
     back.textContent = 'Back to Settings';
     back.addEventListener('click', () => navigate(null));
     body.appendChild(back);
-    body.appendChild(renderChoice(category, store.get(category.key), store));
+    for (const field of category.fields || [category]) {
+      body.appendChild(renderChoice(field, store.get(field.key), store));
+    }
     return;
   }
   for (const field of SETTINGS_SCHEMA) {
