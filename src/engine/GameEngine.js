@@ -20,8 +20,12 @@ import { appSettings } from '../settings/appSettings.js';
 import { GRAPHICS_PROFILES } from '../settings/graphicsProfiles.js';
 
 export class GameEngine {
-  constructor(container) {
+  constructor(container, { fpsDebug = false } = {}) {
     this.container = container;
+    this.fpsDebug = fpsDebug;
+    this.fpsDisplay = null;
+    this.fpsElapsed = 0;
+    this.fpsFrames = 0;
     this.runs = new RunLifecycle();
     this.audio = new AudioManager();
 
@@ -94,6 +98,7 @@ export class GameEngine {
     const ch = document.createElement('div');
     ch.id = 'crosshair';
     this.container.appendChild(ch);
+    this._createFpsDisplay();
 
     // Object clicks: browser click → raycaster → GameObject._triggerClick
     this.container.addEventListener('click', this._onCanvasClick);
@@ -215,6 +220,7 @@ export class GameEngine {
     this._animId = requestAnimationFrame(() => this._loop());
 
     const dt = Math.min(this.clock.getDelta(), 0.05);
+    this._updateFpsDisplay(dt);
 
     this.player.update(dt);
     this.physics.step(dt);
@@ -230,6 +236,28 @@ export class GameEngine {
     for (const coin of this.goldCoins ?? []) coin.updateCoin(dt);
 
     this.renderer.render(this.sceneManager.scene, this.sceneManager.camera);
+  }
+
+  _createFpsDisplay() {
+    if (!this.fpsDebug) return;
+    const host = document.getElementById('viewport-pane');
+    if (!host) return;
+    const display = document.createElement('div');
+    display.dataset.gameFps = '';
+    display.textContent = 'FPS: --';
+    display.style.cssText = 'position:absolute;left:10px;top:10px;z-index:10000;padding:5px 8px;color:#dff;font:bold 13px/1 monospace;background:rgba(5,24,38,.78);border:1px solid rgba(130,225,255,.4);border-radius:4px;pointer-events:none;';
+    host.appendChild(display);
+    this.fpsDisplay = display;
+  }
+
+  _updateFpsDisplay(dt) {
+    if (!this.fpsDisplay || !Number.isFinite(dt) || dt <= 0) return;
+    this.fpsElapsed += dt;
+    this.fpsFrames += 1;
+    if (this.fpsElapsed < 0.5) return;
+    this.fpsDisplay.textContent = `FPS: ${Math.round(this.fpsFrames / this.fpsElapsed)}`;
+    this.fpsElapsed = 0;
+    this.fpsFrames = 0;
   }
 
   /** Get the Three.js scene */

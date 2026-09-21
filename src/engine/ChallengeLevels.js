@@ -291,7 +291,6 @@ export class ChallengeLevel12 extends ChallengeEnvironment {
       rippleCenters: [[-13.8, 2.0], [12.8, -2.7], [-9.6, -8.8]],
       quality: this.waterQuality,
       debug: true,
-      fpsDebug: true,
     });
     this.waterSurface = this.water.object3D;
 

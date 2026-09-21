@@ -14,6 +14,7 @@ import { appSettings } from './settings/appSettings.js';
 import { mountSettingsPanel } from './settings/SettingsPanel.js';
 import { mountChallengeUI } from './challenges/ChallengeUI.js';
 import { mountSuccessUI } from './challenges/SuccessUI.js';
+import { MobileControls } from './ui/MobileControls.js';
 
 // ===== Application State =====
 const AppState = {
@@ -175,7 +176,7 @@ const challengeResetBtn = document.getElementById('btn-challenge-reset');
   const editor = new EditorManager(editorContainer, { getPlayerPosition: () => engine.getPlayer()?.position });
 
   // ---- Engine ----
-  const engine = new GameEngine(gameContainer);
+  const engine = new GameEngine(gameContainer, { fpsDebug: true });
   await engine.init();
   engine.loadLevel(selectedStage(AppState).levelId);
 
@@ -189,6 +190,7 @@ const challengeResetBtn = document.getElementById('btn-challenge-reset');
   }
 
   let successUI = null;
+  let mobileControls = null;
   function updateMusicVolume() {
     const playing = engine.running && document.hasFocus()
       && document.pointerLockElement === gameContainer
@@ -204,6 +206,7 @@ const challengeResetBtn = document.getElementById('btn-challenge-reset');
     const wasRunning = engine.running;
     if (stopMusic) engine.audio.stopMusic();
     engine.stop();
+    mobileControls?.setSessionActive(false);
     updateMusicVolume();
     if (document.pointerLockElement) {
       document.exitPointerLock();
@@ -219,7 +222,10 @@ const challengeResetBtn = document.getElementById('btn-challenge-reset');
     engine.audio.playMusic();
     engine.resume();
     updateMusicVolume();
-    if (!document.pointerLockElement) {
+    if (mobileControls?.supported) {
+      playOverlay.classList.add('hidden');
+      mobileControls.setSessionActive(true);
+    } else if (!document.pointerLockElement) {
       gameContainer.requestPointerLock();
     }
   };
@@ -237,6 +243,11 @@ const challengeResetBtn = document.getElementById('btn-challenge-reset');
       stopGame({ preserveSuccess: true });
     }
   });
+
+  const escapeGameplay = () => {
+    if (document.pointerLockElement) document.exitPointerLock();
+    else stopGame({ preserveSuccess: true });
+  };
 
   // ---- Code execution ----
   let currentChallengeRun = null;
@@ -321,6 +332,24 @@ const challengeResetBtn = document.getElementById('btn-challenge-reset');
     reset: resetGame,
     challengeUI,
     isChallenge: () => AppState.mode === 'challenge',
+  });
+  mobileControls = new MobileControls({
+    host: document.getElementById('viewport-pane'),
+    getInput: () => engine.getPlayer()?.input,
+    isGameActive: () => engine.running,
+    escapeAction: escapeGameplay,
+    primaryAction: () => {
+      const run = engine.runs.current;
+      if (!run?.active) return;
+      api.buildScope(run).createCube({
+        color: 'red', physics: true, mass: 0, bounciness: 0.75,
+      });
+    },
+    secondaryAction: () => {
+      const run = engine.runs.current;
+      if (!run?.active) return;
+      api.buildScope(run).playExplosion({ radius: 10 });
+    },
   });
   engine.onGoldStarCollected = star => {
     if (!selectedStage(AppState).challenge || star !== challengeStar) return;

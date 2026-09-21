@@ -236,7 +236,7 @@ export class Player extends Actor {
   resetPosition() {
     this.movementController.reset(SPAWN);
     this.cameraController.reset();
-    this.input.keys = Object.create(null);
+    this.input.clear();
     this._overlapHandles.clear();
     this._position.set(SPAWN.x, SPAWN.y, SPAWN.z);
     this.cameraController.applyToActor(SPAWN);

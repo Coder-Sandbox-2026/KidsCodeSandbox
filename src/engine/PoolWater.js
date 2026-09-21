@@ -2,7 +2,6 @@ import * as THREE from 'three';
 
 const waterCausticsUrl = new URL('../assets/textures/water-caustics.png', import.meta.url).href;
 const POOL_WATER_DEBUG = false;
-const POOL_WATER_FPS_DEBUG = false;
 const MAX_REFLECTED_CLOUDS = 10;
 const WATER_QUALITY_VARIANTS = Object.freeze({
   low: 'LOW', medium: 'MEDIUM', high: 'FULL', ultra: 'FULL',
@@ -78,10 +77,9 @@ export class PoolWater {
     sunlight = null, skyReflection = true, cloudReflection = null,
     caustics = true, rippleCenters = [],
     quality = 'high',
-    debug = POOL_WATER_DEBUG, fpsDebug = POOL_WATER_FPS_DEBUG,
+    debug = POOL_WATER_DEBUG,
   }) {
     this.debug = debug;
-    this.fpsDebug = fpsDebug;
     this.quality = WATER_QUALITY_VARIANTS[quality] ? quality : 'high';
     this.qualityVariant = WATER_QUALITY_VARIANTS[this.quality];
     const rippleSeeds = [0.3, 1.7, 2.8];
@@ -548,22 +546,6 @@ export class PoolWater {
     water.renderOrder = 1;
     this.object3D = water;
     this._createWaterDebugPanel();
-    this._createFpsDisplay();
-  }
-
-  _createFpsDisplay() {
-    if (!this.fpsDebug || typeof document === 'undefined'
-      || typeof document.getElementById !== 'function') return;
-    const host = document.getElementById('viewport-pane');
-    if (!host) return;
-    const display = document.createElement('div');
-    display.dataset.poolWaterFps = '';
-    display.textContent = 'FPS: --';
-    display.style.cssText = 'position:absolute;left:10px;top:10px;z-index:10000;padding:5px 8px;color:#dff;font:bold 13px/1 monospace;background:rgba(5,24,38,.78);border:1px solid rgba(130,225,255,.4);border-radius:4px;pointer-events:none;';
-    host.appendChild(display);
-    this.fpsDisplay = display;
-    this.fpsElapsed = 0;
-    this.fpsFrames = 0;
   }
 
   _createWaterDebugPanel() {
@@ -675,15 +657,6 @@ export class PoolWater {
 
   update(dt) {
     if (this.waterMaterial) this.waterMaterial.uniforms.time.value += dt;
-    if (this.fpsDisplay && Number.isFinite(dt) && dt > 0) {
-      this.fpsElapsed += dt;
-      this.fpsFrames += 1;
-      if (this.fpsElapsed >= 0.5) {
-        this.fpsDisplay.textContent = `FPS: ${Math.round(this.fpsFrames / this.fpsElapsed)}`;
-        this.fpsElapsed = 0;
-        this.fpsFrames = 0;
-      }
-    }
   }
 
   dispose() {
@@ -698,8 +671,6 @@ export class PoolWater {
     }
     this.waterDebugPanel?.remove();
     this.waterDebugPanel = null;
-    this.fpsDisplay?.remove();
-    this.fpsDisplay = null;
     this.waterGeometry?.dispose();
     this.waterMaterial?.dispose();
     this.waterCausticsTexture?.dispose();

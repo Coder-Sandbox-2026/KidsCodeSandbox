@@ -4,6 +4,7 @@ const ARROW_MOVEMENT = { KeyW: 'ArrowUp', KeyA: 'ArrowLeft', KeyS: 'ArrowDown', 
 const UI_TARGET = 'input, textarea, select, button, [contenteditable], .monaco-editor, dialog, [role=combobox], [role=menu]';
 
 const SIMPLE_TURN_SPEED = Math.PI / 2; // 90 degrees per second.
+const TOUCH_LOOK_SPEED = Math.PI * 0.65;
 
 /**
  * InputSystem.js – Keyboard and mouse input for movement / camera controllers.
@@ -22,6 +23,11 @@ export class InputSystem {
     this._mouseDx = 0;
     this._mouseDy = 0;
     this._jumpQueued = false;
+    this._virtualActive = false;
+    this._virtualMoveX = 0;
+    this._virtualMoveY = 0;
+    this._virtualLookX = 0;
+    this._virtualLookY = 0;
 
     this._onKeyDown = (e) => {
       if (!this.active || e.target?.closest?.(UI_TARGET)) return;
@@ -64,6 +70,52 @@ export class InputSystem {
       && !document.activeElement?.closest?.(UI_TARGET);
   }
 
+  get virtualActive() {
+    const uiOwner = document.activeElement?.closest?.(UI_TARGET);
+    return this.enabled && this._virtualActive
+      && (!uiOwner || !!uiOwner.closest?.('.mobile-controls'));
+  }
+
+  setVirtualActive(active) {
+    this._virtualActive = !!active;
+    if (!active) this.clearVirtual();
+  }
+
+  setVirtualMove(x, y) {
+    if (!this.virtualActive) return;
+    const length = Math.hypot(x, y);
+    const scale = length > 1 ? 1 / length : 1;
+    this._virtualMoveX = x * scale;
+    this._virtualMoveY = y * scale;
+  }
+
+  getMoveAxes() {
+    if (this.virtualActive) return { x: this._virtualMoveX, y: this._virtualMoveY };
+    let x = Number(this.isDown('KeyD')) - Number(this.isDown('KeyA'));
+    let y = Number(this.isDown('KeyW')) - Number(this.isDown('KeyS'));
+    const length = Math.hypot(x, y);
+    if (length > 1) { x /= length; y /= length; }
+    return { x, y };
+  }
+
+  setVirtualLook(x, y) {
+    if (!this.virtualActive) return;
+    this._virtualLookX = Math.max(-1, Math.min(1, x));
+    this._virtualLookY = Math.max(-1, Math.min(1, y));
+  }
+
+  queueVirtualJump() {
+    if (this.virtualActive) this._jumpQueued = true;
+  }
+
+  clearVirtual() {
+    this._virtualMoveX = 0;
+    this._virtualMoveY = 0;
+    this._virtualLookX = 0;
+    this._virtualLookY = 0;
+    this._jumpQueued = false;
+  }
+
   isDown(code) {
     if (this.controlStyle === 'simple') {
       if (code === 'KeyA' || code === 'KeyD') return false;
@@ -78,6 +130,14 @@ export class InputSystem {
     const dy = this._mouseDy;
     this._mouseDx = 0;
     this._mouseDy = 0;
+    if (this.virtualActive) {
+      return {
+        x: 0,
+        y: 0,
+        turnRadians: this._virtualLookX * TOUCH_LOOK_SPEED * dt,
+        pitchRadians: this._virtualLookY * TOUCH_LOOK_SPEED * dt,
+      };
+    }
     if (!this.active) return { x: 0, y: 0 };
     if (this.controlStyle === 'simple') {
       const direction = Number(this.isDown('ArrowRight')) - Number(this.isDown('ArrowLeft'));
@@ -89,7 +149,7 @@ export class InputSystem {
   consumeJump() {
     const jump = this._jumpQueued;
     this._jumpQueued = false;
-    return this.active && jump;
+    return (this.active || this.virtualActive) && jump;
   }
 
   setEnabled(enabled) {
@@ -102,6 +162,7 @@ export class InputSystem {
     this._jumpQueued = false;
     this._mouseDx = 0;
     this._mouseDy = 0;
+    this.clearVirtual();
   }
 
   dispose() {

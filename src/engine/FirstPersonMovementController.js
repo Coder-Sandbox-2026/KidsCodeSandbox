@@ -55,12 +55,14 @@ export class FirstPersonMovementController {
 
     const wish = new THREE.Vector3();
     if (moveAllowed) {
-      if (input.isDown('KeyW')) wish.add(forward);
-      if (input.isDown('KeyS')) wish.sub(forward);
-      if (input.isDown('KeyD')) wish.add(right);
-      if (input.isDown('KeyA')) wish.sub(right);
+      const axes = input.getMoveAxes?.() ?? {
+        x: Number(input.isDown('KeyD')) - Number(input.isDown('KeyA')),
+        y: Number(input.isDown('KeyW')) - Number(input.isDown('KeyS')),
+      };
+      wish.addScaledVector(right, axes.x);
+      wish.addScaledVector(forward, axes.y);
     }
-    if (wish.lengthSq() > 0) wish.normalize();
+    if (wish.lengthSq() > 1) wish.normalize();
 
     const moveDir = wish.clone();
     const walkSpeed = settings.walkSpeed;
