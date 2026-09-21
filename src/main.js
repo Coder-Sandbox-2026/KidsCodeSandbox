@@ -339,16 +339,12 @@ const challengeResetBtn = document.getElementById('btn-challenge-reset');
     isGameActive: () => engine.running,
     escapeAction: escapeGameplay,
     primaryAction: () => {
-      const run = engine.runs.current;
-      if (!run?.active) return;
-      api.buildScope(run).createCube({
+      api.shapes.createCube({
         color: 'red', physics: true, mass: 0, bounciness: 0.75,
       });
     },
     secondaryAction: () => {
-      const run = engine.runs.current;
-      if (!run?.active) return;
-      api.buildScope(run).playExplosion({ radius: 10 });
+      void engine.vfx?.playEmberExplosion({ radius: 10 });
     },
   });
   engine.onGoldStarCollected = star => {
