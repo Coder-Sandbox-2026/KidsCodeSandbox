@@ -474,6 +474,30 @@ test('level 12 water animates and releases its private GPU resources', async t =
   assert.equal(level.waterRegion.surfaceY, water.position.y);
   assert.equal(level.waterRegion.containsPosition(new THREE.Vector3(0, 0.2, -22)), true);
   assert.equal(level.waterRegion.containsPosition(new THREE.Vector3(30, 0.2, -22)), false);
+  assert.equal(engine.getWaterVolumes().length, 1);
+  assert.equal(level.waterRegion.getBottomHeight(16, -22), 0.12);
+  assert.equal(level.waterRegion.getBottomHeight(0, -22), -3);
+  assert.ok(Math.abs(level.waterRegion.getBottomHeight(11.5, -22) + 1.44) < 1e-12);
+  const basin = level.meshes.find(mesh => mesh.name === 'poolBasin');
+  assert.equal(basin.geometry.attributes.position.count, 17 * 13);
+  const heights = basin.geometry.attributes.position;
+  assert.ok(Math.abs(heights.getZ(0) - 0.12) < 1e-6);
+  assert.ok(Array.from(heights.array).filter((_, i) => i % 3 === 2).some(y => y === -3));
+  const groundSurfaces = level.meshes.filter(mesh => mesh.name === 'groundCheckerGrass');
+  assert.equal(groundSurfaces.length, 4);
+  for (const ground of groundSurfaces) {
+    ground.geometry.computeBoundingBox();
+    assert.equal(ground.geometry.boundingBox.containsPoint(new THREE.Vector3(0, 0, -22)), false,
+      'surrounding ground must leave the basin opening unobstructed');
+  }
+  const banks = level.meshes.filter(mesh => mesh.name === 'poolBank');
+  assert.equal(banks.length, 4);
+  for (const bank of banks) {
+    assert.ok(Math.abs(bank.position.y + bank.geometry.parameters.height / 2 - 1.2) < 1e-12);
+    assert.ok(Math.abs(bank.position.y - bank.geometry.parameters.height / 2 + 3.2) < 1e-12);
+  }
+  assert.ok(level.physicsBodies.some(body => body.translation().y === 0
+    && body.translation().z === -22), 'basin collision mesh is registered');
   const time = water.material.uniforms.time.value;
   level.update(0.25);
   assert.equal(water.material.uniforms.time.value, time + 0.25);

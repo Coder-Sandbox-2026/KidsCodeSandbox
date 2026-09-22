@@ -200,31 +200,40 @@ export class ChallengeLevel11 extends DawnTempleEnvironment {
 
 export class ChallengeLevel12 extends ChallengeEnvironment {
   build() {
-    if (!this._begin()) return;
-
     const centerX = 0, centerZ = -22, width = 34, depth = 24, surfaceY = 1.05;
-    this.waterRegion = Object.freeze({
+    if (!this._beginPoolGround(centerX, centerZ, width, depth)) return;
+    const shallowBottomY = 0.12, deepBottomY = -3;
+    const shelfWidth = 3.5, transitionWidth = 4;
+    const halfWidth = width / 2, halfDepth = depth / 2;
+    const basinHeightAt = (x, z) => {
+      const inset = Math.min(halfWidth - Math.abs(x), halfDepth - Math.abs(z));
+      const t = THREE.MathUtils.smoothstep(inset, shelfWidth, shelfWidth + transitionWidth);
+      return THREE.MathUtils.lerp(shallowBottomY, deepBottomY, t);
+    };
+    const waterVolume = Object.freeze({
+      id: 'challenge-12-pool',
       minX: centerX - width / 2, maxX: centerX + width / 2,
       minZ: centerZ - depth / 2, maxZ: centerZ + depth / 2,
       surfaceY,
+      containsHorizontalPosition(x, z, margin = 0) {
+        return x >= this.minX - margin && x <= this.maxX + margin
+          && z >= this.minZ - margin && z <= this.maxZ + margin;
+      },
       containsPosition(position) {
-        return position.x >= this.minX && position.x <= this.maxX
-          && position.z >= this.minZ && position.z <= this.maxZ
+        return this.containsHorizontalPosition(position.x, position.z)
           && position.y <= this.surfaceY;
       },
+      getSurfaceHeight() { return this.surfaceY; },
+      getBottomHeight(x, z) { return basinHeightAt(x - centerX, z - centerZ); },
     });
+    this.waterVolumes = Object.freeze([waterVolume]);
+    this.waterRegion = waterVolume;
 
-    // One low-poly bowl replaces visible shelf bands: pale shallows slope smoothly
-    // to a lower, warmer center while a hidden box provides simple collision.
-    this._box(width, 0.12, depth, centerX, 0.06, centerZ, 0xd8bd7c, false).name = 'poolBottom';
-    this.basinGeometry = new THREE.PlaneGeometry(width, depth, 12, 8);
+    // A single modest-resolution basin mesh supplies both the visible bottom and
+    // the static collision surface, keeping the shelf, slope and center aligned.
+    this.basinGeometry = new THREE.PlaneGeometry(width, depth, 16, 12);
     const basinPositions = this.basinGeometry.attributes.position;
     const basinColors = [];
-    const basinHeightAt = (x, z) => {
-      const nx = Math.abs(x) / (width / 2);
-      const nz = Math.abs(z) / (depth / 2);
-      return 0.12 + THREE.MathUtils.smoothstep(Math.pow(nx ** 4 + nz ** 4, 0.25), 0.48, 1.0) * 0.70;
-    };
     for (let i = 0; i < basinPositions.count; i++) {
       const x = basinPositions.getX(i), z = basinPositions.getY(i);
       basinPositions.setZ(i, basinHeightAt(x, z));
@@ -239,6 +248,11 @@ export class ChallengeLevel12 extends ChallengeEnvironment {
     const basin = this._mesh(this.basinGeometry, this.resources.vertexMaterial('sand'), centerX, 0, centerZ);
     basin.rotation.x = -Math.PI / 2;
     basin.name = 'poolBasin';
+    const basinCollider = this.physics.RAPIER.ColliderDesc.trimesh(
+      Float32Array.from(basinPositions.array),
+      Uint32Array.from(this.basinGeometry.index.array)
+    );
+    this._fixed(basin, basinCollider);
     const rockGeometry = this.resources.scenery('rock');
     const rockMaterial = this.resources.vertexMaterial('rock');
     this.underwaterRockMaterial = rockMaterial.clone();
@@ -270,7 +284,7 @@ export class ChallengeLevel12 extends ChallengeEnvironment {
       [centerX - width / 2 - 1.5, centerZ, 3, depth],
       [centerX + width / 2 + 1.5, centerZ, 3, depth],
     ]) {
-      const edge = this._box(w, 1.20, d, x, 0.60, z, bank.color.getHex(), false);
+      const edge = this._box(w, 4.40, d, x, -1.00, z, bank.color.getHex(), false);
       edge.name = 'poolBank';
     }
 
@@ -297,6 +311,33 @@ export class ChallengeLevel12 extends ChallengeEnvironment {
     this._finish([[-38, -32], [39, -31], [-38, 26], [39, 27]]);
   }
 
+  _beginPoolGround(centerX, centerZ, width, depth) {
+    if (this.meshes.length) return false;
+    const edge = 70;
+    const minX = centerX - width / 2, maxX = centerX + width / 2;
+    const minZ = centerZ - depth / 2, maxZ = centerZ + depth / 2;
+    const slabs = [
+      [140, minZ + edge, 0, (minZ - edge) / 2],
+      [140, edge - maxZ, 0, (maxZ + edge) / 2],
+      [minX + edge, depth, (minX - edge) / 2, centerZ],
+      [edge - maxX, depth, (maxX + edge) / 2, centerZ],
+    ];
+    for (const [w, d, x, z] of slabs) {
+      this._checkerBase(w, 1, d, x, -0.5, z, 0x52b86c);
+      const grass = this._mesh(
+        this.resources.checkerGrass(x, z, w, d),
+        this.resources.vertexMaterial('grass'), 0, 0.002, 0
+      );
+      grass.name = 'groundCheckerGrass';
+      grass.castShadow = false;
+    }
+    this._box(140, 3, 1, 0, 1.5, -edge, 0x326d99, false);
+    this._box(140, 3, 1, 0, 1.5, edge, 0x326d99, false);
+    this._box(1, 3, 140, -edge, 1.5, 0, 0x326d99, false);
+    this._box(1, 3, 140, edge, 1.5, 0, 0x326d99, false);
+    return true;
+  }
+
   update(dt) {
     this.water?.update(dt);
   }
@@ -316,6 +357,7 @@ export class ChallengeLevel12 extends ChallengeEnvironment {
     this.underwaterRockMaterial = null;
     this.waterSurface = null;
     this.waterRegion = null;
+    this.waterVolumes = [];
   }
 }
 

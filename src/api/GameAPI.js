@@ -12,6 +12,10 @@ import { studentCreationOptions, studentObject } from './studentTransforms.js';
 
 const MAX_FORMAT_DEPTH = 8;
 
+function normalizeKey(key) {
+  return typeof key === 'string' ? key.toLowerCase() : key;
+}
+
 function isPlainObject(value) {
   if (value === null || typeof value !== 'object') return false;
   const proto = Object.getPrototypeOf(value);
@@ -120,9 +124,11 @@ export class GameAPI {
   }
 
   _emitKey(event, type) {
+    const code = normalizeKey(event.code);
+    const key = normalizeKey(event.key);
     for (const handler of this._keyHandlers) {
       if ((handler.type || 'down') !== type) continue;
-      if (handler.key === event.code || handler.key === event.key) {
+      if (handler.key === code || handler.key === key) {
         handler.fn();
       }
     }
@@ -296,15 +302,16 @@ export class GameAPI {
       getPlayerDirection: () => engine.getPlayer().getPlayerDirection(),
       setPlayerDirection: (direction) => engine.getPlayer().setPlayerDirection(direction),
 
-      isKeyDown: (key) => !!engine.player?.input.active && self._keysDown.has(key),
+      isKeyDown: (key) => !!engine.player?.input.active
+        && Array.from(self._keysDown).some(pressed => normalizeKey(pressed) === normalizeKey(key)),
       onKeyDown: (key, fn) => {
-        self._keyHandlers.push({ key, fn, type: 'down' });
+        self._keyHandlers.push({ key: normalizeKey(key), fn, type: 'down' });
       },
       onKeyPressed: (key, fn) => {
-        self._keyHandlers.push({ key, fn, type: 'pressed' });
+        self._keyHandlers.push({ key: normalizeKey(key), fn, type: 'pressed' });
       },
       onKeyReleased: (key, fn) => {
-        self._keyHandlers.push({ key, fn, type: 'released' });
+        self._keyHandlers.push({ key: normalizeKey(key), fn, type: 'released' });
       },
 
       log: (...args) => kidConsole.log(...args),

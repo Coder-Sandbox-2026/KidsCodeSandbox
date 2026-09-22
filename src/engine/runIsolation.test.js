@@ -236,6 +236,27 @@ test('old update, click, collision, player and keyboard callbacks cannot fire in
   assert.equal(calls, oldCallbacks.length + 1);
 });
 
+test('manually typed and autocomplete-formatted key code execute identically', async t => {
+  const h = await harness(t);
+  const sources = [
+    'onKeyPressed("keyB", () => { print("Hello!"); });',
+    'onKeyPressed("KeyB", () => { print("Hello!"); });',
+  ];
+
+  for (const code of sources) {
+    const { run, scope } = h.begin();
+    await run.execute(code, scope);
+    h.api._emitKey({ code: 'KeyB', key: 'b' }, 'pressed');
+  }
+
+  const { run, scope } = h.begin();
+  document.pointerLockElement = {};
+  h.api._keysDown.add('KeyB');
+  await run.execute('if (isKeyDown("keyB")) print("down");', scope);
+
+  assert.deepEqual(h.output, ['Hello!', 'Hello!', 'down']);
+});
+
 test('async callbacks already in flight cannot mutate a retained player after await', async t => {
   const h = await harness(t);
   const { scope } = h.begin();

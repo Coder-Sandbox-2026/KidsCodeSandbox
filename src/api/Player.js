@@ -177,12 +177,16 @@ export class Player extends Actor {
   /** Engine pause / resume — also used when the viewport is not focused. */
   setEnabled(enabled) {
     this.input.setEnabled(enabled);
+    if (!enabled) this.movementController.clearSwimming(true);
   }
 
   update(dt) {
     if (!this.input.enabled) return;
     this.cameraController.applyLook(this.input.consumeLookDelta(dt));
-    const newPos = this.movementController.update(dt, this.input, this.cameraController.yaw);
+    const newPos = this.movementController.update(dt, this.input, this.cameraController.yaw, {
+      waterVolumes: this.engine?.getWaterVolumes?.() ?? [],
+      eyeHeight: this.cameraController.eyeHeight,
+    });
     this.cameraController.applyToActor(newPos);
     this._position.set(newPos.x, newPos.y, newPos.z);
   }
@@ -243,6 +247,7 @@ export class Player extends Actor {
   }
 
   dispose() {
+    this.movementController.clearSwimming(true);
     this.input.dispose();
     if (this.collider) {
       this.physics.unregisterActorCollider(this.collider);

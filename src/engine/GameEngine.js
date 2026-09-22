@@ -210,6 +210,11 @@ export class GameEngine {
     return this.player;
   }
 
+  /** Logical gameplay water volumes supplied by the active level. */
+  getWaterVolumes() {
+    return this.level?.waterVolumes ?? [];
+  }
+
   /** The single render/physics loop. Stops scheduling frames when paused. */
   _loop() {
     if (!this.running) {
