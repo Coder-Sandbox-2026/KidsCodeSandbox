@@ -26,6 +26,8 @@ interface ShapeOptions {
   name?: string;
   bounciness?: number;
   friction?: number;
+  /** How many seconds the object stays before disappearing. */
+  duration?: number;
 }
 
 interface Vec3 {
@@ -85,6 +87,8 @@ interface GameObject extends Actor {
   setScale(x: number, y?: number, z?: number): GameObject;
   /** Rotate in degrees */
   rotate(x: number, y: number, z: number): GameObject;
+  /** Push this object once in a direction. */
+  move(direction: [number, number, number] | number[], force: number): GameObject;
   enablePhysics(opts?: { mass?: number; bounciness?: number; friction?: number }): GameObject;
   disablePhysics(): GameObject;
   setPhysics(opts: { enabled?: boolean; mass?: number; bounciness?: number; friction?: number } | boolean): GameObject;
@@ -180,6 +184,7 @@ declare function getPlayer(): Player;
 declare function getPlayerPosition(): [number, number, number];
 declare function setPlayerPosition(position: [number, number, number]): void;
 declare function getPlayerDirection(): [number, number, number];
+declare function getPlayerLookDirection(): [number, number, number];
 declare function setPlayerDirection(direction: [number, number, number]): void;
 
 declare function isKeyDown(key: string): boolean;

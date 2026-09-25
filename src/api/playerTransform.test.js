@@ -70,6 +70,13 @@ test('player transform APIs synchronize physics and first-person view safely', a
   assert.ok(look.x > 0.9);
   assert.ok(Math.abs(look.z) < 1e-12);
   assert.ok(Math.abs(new THREE.Vector3(...direction).length() - 1) < 1e-12);
+  player.cameraController.pitch = 0.4;
+  player.cameraController.applyToActor(player.position);
+  const lookDirection = scope.getPlayerLookDirection();
+  assert.ok(lookDirection[1] > 0.3);
+  assert.ok(Math.abs(new THREE.Vector3(...lookDirection).length() - 1) < 1e-12);
+  lookDirection[1] = 999;
+  assert.ok(scope.getPlayerLookDirection()[1] < 1);
   direction[0] = 999;
   assert.ok(scope.getPlayerDirection()[0] <= 1);
   scope.setPlayerDirection([0, 0, -1]);
@@ -124,7 +131,7 @@ test('player transform APIs synchronize physics and first-person view safely', a
   });
 });
 
-test('all four global transform APIs have function metadata and autocomplete', () => {
+test('all player transform APIs have function metadata and autocomplete', () => {
   let provider;
   registerAutocomplete({ languages: {
     CompletionItemKind: { Function: 1, Method: 2, Property: 3 },
@@ -132,7 +139,7 @@ test('all four global transform APIs have function metadata and autocomplete', (
     registerCompletionItemProvider(_language, value) { provider = value; },
     registerHoverProvider() {},
   } });
-  for (const name of ['getPlayerPosition', 'setPlayerPosition', 'getPlayerDirection', 'setPlayerDirection']) {
+  for (const name of ['getPlayerPosition', 'setPlayerPosition', 'getPlayerDirection', 'getPlayerLookDirection', 'setPlayerDirection']) {
     assert.equal(API_DOCS.find(item => item.label === name)?.kind, 'Function');
     const result = provider.provideCompletionItems({
       getWordUntilPosition: () => ({ startColumn: 1, endColumn: name.length + 1 }),

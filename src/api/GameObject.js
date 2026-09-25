@@ -333,13 +333,13 @@ export class GameObject extends Actor {
       setups.push({ desc: this._colliderDescFromMesh(), sensor: false });
     }
     const visual = firstMesh(this.mesh);
-    const geoType = visual?.geometry?.type;
+    const isSphere = visual?.geometry?.type === 'SphereGeometry';
     const info = this.engine.physics.addDynamic(this.mesh, setups[0].desc, {
       mass: opts.mass,
       restitution: opts.restitution ?? opts.bounciness ?? 0.12,
       friction: opts.friction ?? 0.9,
-      linearDamping: opts.linearDamping ?? (geoType === 'SphereGeometry' ? 0.6 : 0.5),
-      angularDamping: opts.angularDamping ?? (geoType === 'SphereGeometry' ? 2.2 : 1.0),
+      linearDamping: opts.linearDamping ?? 0.05,
+      angularDamping: opts.angularDamping ?? (isSphere ? 0.5 : 0.05),
       extraColliders: setups.slice(1),
     });
     this._physicsInfo = info;
@@ -371,6 +371,25 @@ export class GameObject extends Actor {
     if (opts.mass !== undefined) this.mass = opts.mass;
     if (opts.bounciness !== undefined) this.bounciness = opts.bounciness;
     if (opts.friction !== undefined) this.friction = opts.friction;
+    return this;
+  }
+
+  /** Give this object one physical push in the supplied direction. */
+  move(direction, force) {
+    if (!Array.isArray(direction) || direction.length !== 3
+      || !direction.every(Number.isFinite)) {
+      throw new TypeError('move() direction must be [x, y, z] with three numbers.');
+    }
+    if (!Number.isFinite(force)) throw new TypeError('move() force must be a number.');
+    const [x, y, z] = direction;
+    const length = Math.hypot(x, y, z);
+    if (length === 0) throw new Error('move() direction must point somewhere.');
+    if (!this._physicsInfo) this.enablePhysics();
+    this._physicsInfo.body.applyImpulse({
+      x: x / length * force,
+      y: y / length * force,
+      z: z / length * force,
+    }, true);
     return this;
   }
 

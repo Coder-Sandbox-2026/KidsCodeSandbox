@@ -67,8 +67,8 @@ function buildObject(mesh, engine, opts = {}) {
       mass: opts.mass,
       restitution: opts.bounciness ?? 0.12,
       friction: opts.friction ?? 0.9,
-      linearDamping: opts.linearDamping ?? (mesh.geometry.type === 'SphereGeometry' ? 0.6 : 0.5),
-      angularDamping: opts.angularDamping ?? (mesh.geometry.type === 'SphereGeometry' ? 2.2 : 1.0),
+      linearDamping: opts.linearDamping ?? 0.05,
+      angularDamping: opts.angularDamping ?? (mesh.geometry.type === 'SphereGeometry' ? 0.5 : 0.05),
     });
   }
 

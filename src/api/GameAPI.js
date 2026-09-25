@@ -99,6 +99,8 @@ export class GameAPI {
     this._clearConsoleFn = clearConsoleFn || (() => {});
 
     this._objects = [];
+    this._expirations = new Map();
+    this._expirationTimer = null;
     this.shapes = createShapeFactories(engine);
     this.models = createModelFactories(engine);
     this._keysDown = new Set();
@@ -242,14 +244,22 @@ export class GameAPI {
     const wrapCreate = (fn, name) => (opts) => {
       const obj = fn(studentCreationOptions(opts));
       self._objects.push(obj);
+      self._expirations ??= new Map();
       const destroy = obj.destroy;
       obj.destroy = function (...args) {
         try { return destroy.apply(this, args); }
         finally {
           const index = self._objects.indexOf(obj);
           if (index >= 0) self._objects.splice(index, 1);
+          self._expirations.delete(obj);
+          if (!self._processingExpirations) self._scheduleExpiration();
         }
       };
+      const duration = Number(opts?.duration);
+      if (Number.isFinite(duration) && duration > 0) {
+        self._expirations.set(obj, performance.now() + duration * 1000);
+        self._scheduleExpiration();
+      }
       if (name) report(name);
       return studentObject(obj);
     };
@@ -300,6 +310,7 @@ export class GameAPI {
       getPlayerPosition: () => engine.getPlayer().getPlayerPosition(),
       setPlayerPosition: (position) => engine.getPlayer().setPlayerPosition(position),
       getPlayerDirection: () => engine.getPlayer().getPlayerDirection(),
+      getPlayerLookDirection: () => engine.getPlayer().getPlayerLookDirection(),
       setPlayerDirection: (direction) => engine.getPlayer().setPlayerDirection(direction),
 
       isKeyDown: (key) => !!engine.player?.input.active
@@ -326,10 +337,36 @@ export class GameAPI {
   reset() {
     if (this.engine.player) this.engine.player._onJumpForceChanged = null;
     this._objects = [];
+    this._expirations ??= new Map();
+    this._expirations.clear();
+    clearTimeout(this._expirationTimer);
+    this._expirationTimer = null;
     this._keyHandlers = [];
     this._groupDepth = 0;
     this._timers.clear();
     this._counts.clear();
     this.hud.clear();
+  }
+
+  _scheduleExpiration() {
+    clearTimeout(this._expirationTimer);
+    this._expirationTimer = null;
+    if (!this._expirations?.size) return;
+    const now = performance.now();
+    let next = Infinity;
+    for (const expiresAt of this._expirations.values()) next = Math.min(next, expiresAt);
+    this._expirationTimer = setTimeout(() => {
+      this._expirationTimer = null;
+      const current = performance.now();
+      this._processingExpirations = true;
+      try {
+        for (const [object, expiresAt] of [...this._expirations]) {
+          if (expiresAt <= current) object.destroy();
+        }
+      } finally {
+        this._processingExpirations = false;
+      }
+      this._scheduleExpiration();
+    }, Math.max(0, next - now));
   }
 }

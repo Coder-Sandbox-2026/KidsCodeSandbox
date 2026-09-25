@@ -43,6 +43,7 @@ export const SHAPE_OPTIONS = [
   optionField('name', 'text', 'A name so you can find the object later.', { example: '"box"' }),
   optionField('bounciness', 'a number from 0 to 1', 'How much the object bounces.', { example: '0.5' }),
   optionField('friction', 'a number from 0 to 1', 'How much the object grips when it slides.', { example: '0.5' }),
+  optionField('duration', 'a number', 'How many seconds the object stays before disappearing.', { example: '5' }),
 ];
 
 /** Options for print() and setText() */
@@ -103,6 +104,11 @@ export const API_DOCS = [
     label: 'getPlayerDirection', kind: 'Function', detail: 'Get which way you face',
     doc: 'getPlayerDirection()\n\nReturns a fresh horizontal [x, 0, z] direction with length 1. Looking up or down does not change it. Forward starts along -Z.\n\nExample:\nprint(getPlayerDirection());',
     completion: call('getPlayerDirection', 'getPlayerDirection()'),
+  },
+  {
+    label: 'getPlayerLookDirection', kind: 'Function', detail: 'Gets the direction the player is looking, including up and down.',
+    doc: 'getPlayerLookDirection()\n\nReturns a fresh [x, y, z] direction with length 1. It follows the camera when you look up or down.\n\nExample:\nball.move(getPlayerLookDirection(), 20);',
+    completion: call('getPlayerLookDirection', 'getPlayerLookDirection()'),
   },
   {
     label: 'setPlayerDirection', kind: 'Function', detail: 'Choose which way you face',
@@ -336,6 +342,11 @@ export const API_DOCS = [
 export const MEMBER_DOCS = [
   { label: 'getSpinRate', kind: 'Method', detail: 'Read collectible spin rate', doc: 'star.getSpinRate()\n\nGoldCoin: speed multiplier, default 1. GoldStar: radians per frame, default 0.01.', completion: call('getSpinRate', 'getSpinRate()') },
   { label: 'setSpinRate', kind: 'Method', detail: 'Set collectible spin rate', doc: 'star.setSpinRate(rate)\n\nGoldCoin uses a speed multiplier: 0 stops, 0.5 half, 1 normal, 2 double. GoldStar uses radians per frame. Use 0 to stop or a negative number to reverse. Returns the star.', completion: call('setSpinRate', 'setSpinRate(${1:0.01})') },
+  {
+    label: 'move', kind: 'Method', detail: 'Pushes the object in a direction.',
+    doc: 'object.move(direction, force)\n\ndirection — The direction the object should move.\nforce — How strong the push is.\n\nThe direction is adjusted to length 1 before one physics push is applied. Physics turns on automatically if needed.\n\nExample:\nball.move(getPlayerLookDirection(), 20);',
+    completion: call('move', 'move(${1:direction}, ${2:5})'),
+  },
 
   { label: 'position', kind: 'Property', detail: 'Object position (x, y, z)', completion: ident('position') },
   { label: 'rotation', kind: 'Property', detail: 'Object rotation in degrees (x, y, z)', completion: ident('rotation') },

@@ -99,6 +99,11 @@ export class Player extends Actor {
     return [-Math.sin(yaw), 0, -Math.cos(yaw)];
   }
 
+  getPlayerLookDirection() {
+    const direction = this.cameraController.camera.getWorldDirection(new THREE.Vector3());
+    return direction.normalize().toArray();
+  }
+
   setPlayerDirection(value) {
     validateVector(value, 'Player direction');
     const [x, , z] = value;
