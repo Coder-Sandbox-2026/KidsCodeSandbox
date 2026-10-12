@@ -237,7 +237,8 @@ export class ModelLoader {
       template,
       colliderParts,
       materialStyle: def.materialStyle,
-      shadowCasterNames: def.shadowCasterNames ?? [],
+      shadowCasterNames: def.shadowCasterNames
+        ?? (def.id === GOLD_STAR_MODEL ? ['Gold Star'] : []),
     });
   }
 
