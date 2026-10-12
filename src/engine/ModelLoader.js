@@ -32,6 +32,7 @@ const COLLECTIBLE_DEFS = [
     fileName: 'GoldStar.glb',
     defaultName: GOLD_STAR_MODEL,
     materialStyle: GOLD_STAR_MODEL,
+    shadowCasterNames: ['Gold Star'],
   },
   {
     id: RED_KEY_MODEL,
@@ -236,6 +237,7 @@ export class ModelLoader {
       template,
       colliderParts,
       materialStyle: def.materialStyle,
+      shadowCasterNames: def.shadowCasterNames ?? [],
     });
   }
 
@@ -253,6 +255,7 @@ export class ModelLoader {
     const root = entry.template.clone(true);
     root.traverse((child) => {
       if (!child.isMesh) return;
+      child.castShadow = entry.shadowCasterNames.includes(child.userData.name ?? child.name);
       // GLTFLoader sanitizes spaces in .name; userData.name retains the authored name.
       if (!child.material) return;
       child.material = Array.isArray(child.material)
