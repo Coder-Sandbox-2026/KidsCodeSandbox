@@ -7,6 +7,17 @@
 import * as THREE from 'three';
 
 const PUSH_ACCEL = 12;
+const SWIM_SPEED_SCALE = 0.65;
+const SWIM_ENTER_DEPTH = 0.15;
+const SWIM_EXIT_MARGIN = 0.25;
+const SWIM_MIN_DEPTH = 1.5;
+const SWIM_EXIT_DEPTH = 1.35;
+const SWIM_CAMERA_CLEARANCE = 0.25;
+const SWIM_SPRING = 20;
+const SWIM_DAMPING = 2 * Math.sqrt(SWIM_SPRING);
+const SWIM_MAX_DOWN_SPEED = 3;
+const SWIM_MAX_UP_SPEED = 4;
+const SWIM_BOOST = 2.2;
 
 export class FirstPersonMovementController {
   /**
@@ -24,11 +35,17 @@ export class FirstPersonMovementController {
 
     this.velocity = new THREE.Vector3();
     this.horizVelocity = new THREE.Vector3();
+    this.knockbackVelocity = new THREE.Vector3();
     this.grounded = false;
     this._jumpsUsed = 0;
     this._justJumped = false;
     this._contactHandles = new Set();
     this._newContactHandles = [];
+    this.activeWaterVolume = null;
+    // Temporary Level 13 diagnostic input. ChallengeLevel13 consumes this
+    // snapshot only when a door contact is present and limits console output.
+    this.contactDiagnosticEnabled = false;
+    this.lastMovementContactSnapshot = null;
 
     this.controller = physics.createCharacterController(0.05);
     this.controller.enableAutostep(0.4, 0.2, true);
@@ -42,9 +59,12 @@ export class FirstPersonMovementController {
    * @param {{ isDown: (code: string) => boolean, consumeJump: () => boolean }} input
    * @param {number} yaw  Camera yaw so movement is look-relative
    */
-  update(dt, input, yaw) {
+  update(dt, input, yaw, { waterVolumes = [], eyeHeight = 0.8 } = {}) {
     const settings = this.getSettings();
     const moveAllowed = settings.movementEnabled !== false;
+    const pos = this.body.translation();
+    this._updateSwimmingState(pos, waterVolumes);
+    const swimming = !!this.activeWaterVolume;
 
     const forward = new THREE.Vector3(0, 0, -1);
     const right = new THREE.Vector3(1, 0, 0);
@@ -54,30 +74,50 @@ export class FirstPersonMovementController {
 
     const wish = new THREE.Vector3();
     if (moveAllowed) {
-      if (input.isDown('KeyW')) wish.add(forward);
-      if (input.isDown('KeyS')) wish.sub(forward);
-      if (input.isDown('KeyD')) wish.add(right);
-      if (input.isDown('KeyA')) wish.sub(right);
+      const axes = input.getMoveAxes?.() ?? {
+        x: Number(input.isDown('KeyD')) - Number(input.isDown('KeyA')),
+        y: Number(input.isDown('KeyW')) - Number(input.isDown('KeyS')),
+      };
+      wish.addScaledVector(right, axes.x);
+      wish.addScaledVector(forward, axes.y);
     }
-    if (wish.lengthSq() > 0) wish.normalize();
+    if (wish.lengthSq() > 1) wish.normalize();
 
     const moveDir = wish.clone();
-    const walkSpeed = settings.walkSpeed;
+    const walkSpeed = settings.walkSpeed * (swimming ? SWIM_SPEED_SCALE : 1);
     const targetHoriz = wish.multiplyScalar(walkSpeed);
-    if (!this.grounded) {
+    if (!this.grounded && !swimming) {
       targetHoriz.multiplyScalar(settings.airControl);
     }
 
     const hasWish = moveDir.lengthSq() > 0.0001;
-    const rate = (hasWish ? settings.acceleration : settings.deceleration) * dt;
+    const rate = swimming
+      ? (hasWish ? 6 : 10) * dt
+      : (hasWish ? settings.acceleration : settings.deceleration) * dt;
     const t = rate >= 1 ? 1 : Math.max(0, rate);
     this.horizVelocity.lerp(targetHoriz, t);
 
-    const move = this.horizVelocity.clone().multiplyScalar(dt);
+    let swimJump = false;
+    if (swimming) {
+      swimJump = moveAllowed && input.consumeJump();
+      if (swimJump) this.velocity.y = Math.max(this.velocity.y, SWIM_BOOST);
+    }
 
-    this.velocity.y += -settings.gravity * dt;
-    if (this.velocity.y < -settings.maxFallSpeed) {
-      this.velocity.y = -settings.maxFallSpeed;
+    const move = this.horizVelocity.clone().add(this.knockbackVelocity).multiplyScalar(dt);
+    this.knockbackVelocity.multiplyScalar(Math.exp(-(swimming ? 7 : 4) * dt));
+
+    if (swimming) {
+      const surfaceY = this.activeWaterVolume.getSurfaceHeight(pos.x, pos.z);
+      const targetY = surfaceY + SWIM_CAMERA_CLEARANCE - eyeHeight;
+      this.velocity.y += ((targetY - pos.y) * SWIM_SPRING
+        - this.velocity.y * SWIM_DAMPING) * dt;
+      this.velocity.y = Math.max(-SWIM_MAX_DOWN_SPEED,
+        Math.min(SWIM_MAX_UP_SPEED, this.velocity.y));
+    } else {
+      this.velocity.y += -settings.gravity * dt;
+      if (this.velocity.y < -settings.maxFallSpeed) {
+        this.velocity.y = -settings.maxFallSpeed;
+      }
     }
     move.y = this.velocity.y * dt;
 
@@ -90,16 +130,51 @@ export class FirstPersonMovementController {
     );
     const corrected = this.controller.computedMovement();
 
+    this.lastMovementContactSnapshot = null;
+    if (this.contactDiagnosticEnabled) {
+      this.lastMovementContactSnapshot = {
+        requested: { x: move.x, y: move.y, z: move.z },
+        corrected: { x: corrected.x, y: corrected.y, z: corrected.z },
+        contacts: [],
+      };
+      for (let i = 0; i < this.controller.numComputedCollisions(); i++) {
+        const collision = this.controller.computedCollision(i);
+        const collider = collision?.collider;
+        if (!collider) continue;
+        const body = collider.parent?.();
+        const bodyType = body?.isKinematic?.()
+          ? 'kinematic'
+          : body?.isFixed?.()
+            ? 'fixed'
+            : body?.isDynamic?.()
+              ? 'dynamic'
+              : 'unknown';
+        this.lastMovementContactSnapshot.contacts.push({
+          handle: collider.handle,
+          bodyType,
+          normal: collision.normal1
+            ? [collision.normal1.x, collision.normal1.y, collision.normal1.z]
+            : [0, 0, 0],
+        });
+      }
+    }
+
     this._collectCharacterContacts();
     this._pushDynamicBodies(moveDir, dt, walkSpeed);
+    if (!swimming && this.velocity.y > 0 && this._hasCeilingContact()) {
+      this.velocity.y = 0;
+    }
 
-    const pos = this.body.translation();
     const newPos = {
       x: pos.x + corrected.x,
       y: pos.y + corrected.y,
       z: pos.z + corrected.z,
     };
     this.body.setNextKinematicTranslation(newPos);
+    // Keep the current Rapier pose aligned with the pose just accepted by the
+    // character controller. The next pose is still submitted for the normal
+    // physics step, matching the reference controller's fixed-step behavior.
+    this.body.setTranslation(newPos, true);
 
     this.grounded = this.controller.computedGrounded();
     if (this.grounded && !this._justJumped) {
@@ -108,13 +183,63 @@ export class FirstPersonMovementController {
     }
     this._justJumped = false;
 
-    if (moveAllowed && input.consumeJump()) {
+    if (!swimming && moveAllowed && input.consumeJump()) {
       this._tryJump(settings);
-    } else {
+    } else if (!swimming) {
       input.consumeJump();
     }
 
     return newPos;
+  }
+
+  addKnockback(velocity) {
+    this.knockbackVelocity.x += velocity.x;
+    this.knockbackVelocity.z += velocity.z;
+    this.velocity.y += velocity.y;
+  }
+
+  get swimming() {
+    return !!this.activeWaterVolume;
+  }
+
+  _updateSwimmingState(position, waterVolumes) {
+    const active = this.activeWaterVolume;
+    if (active) {
+      const surfaceY = active.getSurfaceHeight(position.x, position.z);
+      const bottomY = active.getBottomHeight?.(position.x, position.z);
+      const depth = surfaceY - bottomY;
+      const insideExitBounds = active.containsHorizontalPosition(
+        position.x, position.z, SWIM_EXIT_MARGIN
+      );
+      if (!insideExitBounds || !(depth >= SWIM_EXIT_DEPTH)
+        || (this.grounded && position.y > surfaceY + 0.05)) {
+        this.clearSwimming();
+      }
+      return;
+    }
+
+    for (const volume of waterVolumes) {
+      if (!volume?.containsHorizontalPosition?.(position.x, position.z, 0)) continue;
+      const surfaceY = volume.getSurfaceHeight(position.x, position.z);
+      const bottomY = volume.getBottomHeight?.(position.x, position.z);
+      if (!(surfaceY - bottomY >= SWIM_MIN_DEPTH)) continue;
+      if (position.y <= surfaceY - SWIM_ENTER_DEPTH) {
+        this.activeWaterVolume = volume;
+        this._jumpsUsed = 0;
+        this._justJumped = false;
+        break;
+      }
+    }
+  }
+
+  clearSwimming(resetMotion = false) {
+    const wasSwimming = !!this.activeWaterVolume;
+    this.activeWaterVolume = null;
+    if (resetMotion && wasSwimming) {
+      this.velocity.set(0, 0, 0);
+      this.horizVelocity.set(0, 0, 0);
+      this.knockbackVelocity.set(0, 0, 0);
+    }
   }
 
   _tryJump(settings) {
@@ -126,6 +251,7 @@ export class FirstPersonMovementController {
     this.grounded = false;
     this._jumpsUsed += 1;
     this._justJumped = true;
+    this.onJump?.();
   }
 
   _collectCharacterContacts() {
@@ -150,6 +276,16 @@ export class FirstPersonMovementController {
     const handles = this._newContactHandles;
     this._newContactHandles = [];
     return handles;
+  }
+
+  _hasCeilingContact() {
+    const num = this.controller.numComputedCollisions();
+    for (let i = 0; i < num; i++) {
+      const normal = this.controller.computedCollision(i)?.normal1;
+      // normal1 points out from the obstacle: the underside of a ceiling points down.
+      if (normal?.y < -0.5) return true;
+    }
+    return false;
   }
 
   _pushDynamicBodies(moveDir, dt, walkSpeed) {
@@ -206,12 +342,15 @@ export class FirstPersonMovementController {
 
   reset(spawn) {
     this.body.setNextKinematicTranslation(spawn);
+    this.body.setTranslation(spawn, true);
     this.velocity.set(0, 0, 0);
     this.horizVelocity.set(0, 0, 0);
+    this.knockbackVelocity.set(0, 0, 0);
     this.grounded = false;
     this._jumpsUsed = 0;
     this._justJumped = false;
     this._contactHandles.clear();
     this._newContactHandles = [];
+    this.clearSwimming();
   }
 }

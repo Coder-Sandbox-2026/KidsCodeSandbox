@@ -8,7 +8,7 @@ export default defineConfig({
       allow: ['.'],
     },
   },
-  assetsInclude: ['**/*.glb', '**/*.ktx2', '**/*.wasm'],
+  assetsInclude: ['**/*.glb', '**/*.gltf', '**/*.bin', '**/*.ktx2', '**/*.wasm'],
   build: {
     outDir: 'dist',
     assetsInlineLimit: 100000000,

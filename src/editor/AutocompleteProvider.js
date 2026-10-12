@@ -8,22 +8,82 @@
 import { appSettings } from '../settings/appSettings.js';
 import {
   API_DOCS,
+  KEYWORD_DOCS,
   CONSOLE_DOCS,
   MEMBER_DOCS,
   PLAYER_DOCS,
   findHoverEntry,
 } from './apiCompletions.js';
-import { buildCompletion, isInCommentOrString, wordRangeFromMonaco } from './completionEngine.js';
+import { buildCompletion, completionSourceContext, wordRangeFromMonaco, optionContext, currentPositionText, withCurrentPosition, globalNameMatchRank } from './completionEngine.js';
 import { buildHover } from './hoverDocs.js';
 
-export function registerAutocomplete(monaco) {
+const RED_KEY_MEMBER_DOCS = MEMBER_DOCS.filter(item => item.label === 'onCollision');
+
+function regexEscape(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Resolve a small, intentionally conservative chain of local assignments. */
+function assignedExpression(name, source) {
+  if (!name) return null;
+  const pattern = new RegExp(`\\b(?:const|let|var)\\s+${regexEscape(name)}\\s*=\\s*([^;\\n]+)`, 'g');
+  let expression = null;
+  for (const match of source.matchAll(pattern)) expression = match[1].trim();
+  return expression;
+}
+
+function isRedKeyExpression(expression, source, seen = new Set()) {
+  const value = String(expression ?? '').trim().replace(/;$/, '').trim();
+  if (/^(?:getKeyRed|keyRed)\s*\(\s*\)\s*(?:\?\.)?$/.test(value)) return true;
+  if (!/^[A-Za-z_$][\w$]*$/.test(value) || seen.has(value)) return false;
+  seen.add(value);
+  return isRedKeyExpression(assignedExpression(value, source, seen), source, seen);
+}
+
+/** Return the member catalog for a receiver immediately before its dot. */
+export function memberDocsForSource(source) {
+  const text = String(source ?? '');
+  if (/(?:getKeyRed|keyRed)\s*\(\s*\)\s*\?\.\s*$/.test(text)) return RED_KEY_MEMBER_DOCS;
+  const owner = text.match(/(?:^|[^\w$])([A-Za-z_$][\w$]*)\s*\.\s*$/)?.[1];
+  if (!owner) return null;
+  return isRedKeyExpression(assignedExpression(owner, text), text)
+    ? RED_KEY_MEMBER_DOCS
+    : null;
+}
+
+/** Keep Monaco's document words out of authoritative API property lists. */
+export function bindOptionSuggestionScope(editor) {
+  const normal = editor.getRawOptions().wordBasedSuggestions ?? 'currentDocument';
+  let exclusive = false;
+  const update = () => {
+    const model = editor.getModel();
+    const position = editor.getPosition();
+    const source = model && position ? model.getValueInRange({
+      startLineNumber: 1, startColumn: 1,
+      endLineNumber: position.lineNumber, endColumn: position.column,
+    }) : null;
+    // An empty list still identifies the property context: never use word fallback.
+    const next = source != null && optionContext(source, API_DOCS, PLAYER_DOCS) !== null;
+    if (next !== exclusive) {
+      exclusive = next;
+      editor.updateOptions({ wordBasedSuggestions: exclusive ? 'off' : normal });
+    }
+  };
+  const listeners = [editor.onDidChangeCursorPosition(update),
+    editor.onDidChangeModelContent(update), editor.onDidChangeModel(update)];
+  editor.onDidDispose(() => listeners.forEach(listener => listener.dispose()));
+  update();
+}
+
+export function registerAutocomplete(monaco, { getPlayerPosition } = {}) {
   const kindMap = {
     Function: monaco.languages.CompletionItemKind.Function,
     Method: monaco.languages.CompletionItemKind.Method,
     Property: monaco.languages.CompletionItemKind.Property,
+    Keyword: monaco.languages.CompletionItemKind.Keyword,
   };
 
-  function toSuggestion(item, range, monacoApi, line) {
+  function toSuggestion(item, range, monacoApi, line, playerPosition) {
     const built = buildCompletion(item, {
       level: appSettings.get('codeCoach'),
       line,
@@ -33,7 +93,7 @@ export function registerAutocomplete(monaco) {
     return {
       label: item.label,
       kind: kindMap[item.kind] || monacoApi.languages.CompletionItemKind.Function,
-      insertText: built.insertText,
+      insertText: withCurrentPosition(built.insertText, playerPosition),
       insertTextRules: built.isSnippet
         ? monacoApi.languages.CompletionItemInsertTextRule.InsertAsSnippet
         : undefined,
@@ -46,23 +106,87 @@ export function registerAutocomplete(monaco) {
   }
 
   monaco.languages.registerCompletionItemProvider('javascript', {
-    triggerCharacters: ['.'],
+    triggerCharacters: ['.', '{'],
     provideCompletionItems(model, position) {
       const range = wordRangeFromMonaco(model, position);
       const lineContent = model.getLineContent(position.lineNumber);
-      if (isInCommentOrString(lineContent, position.column)) {
+      const source = model.getValueInRange({
+        startLineNumber: 1, startColumn: 1,
+        endLineNumber: position.lineNumber, endColumn: position.column,
+      });
+      const context = completionSourceContext(source);
+      if (!context) {
         return { suggestions: [] };
       }
+      const prefix = lineContent.slice(range.startColumn - 1, position.column - 1);
+      const matches = name => name.startsWith(prefix);
 
-      const charBefore = lineContent[range.startColumn - 2];
-      if (charBefore === '.') {
-        const beforeDot = lineContent.slice(0, range.startColumn - 2);
-        const owner = (beforeDot.match(/(\w+)$/) || [])[1];
-        const docs = owner === 'console' ? CONSOLE_DOCS : owner === 'player' ? PLAYER_DOCS : MEMBER_DOCS;
-        return { suggestions: docs.map(item => toSuggestion(item, range, monaco, lineContent)) };
+      const playerPosition = currentPositionText(getPlayerPosition);
+      const options = optionContext(source, API_DOCS, PLAYER_DOCS);
+      if (options) {
+        return { incomplete: true, suggestions: options.filter(option => matches(option.name)).map(option => {
+          let value = option.name === 'position' && playerPosition ? playerPosition : option.example;
+          if (option.name === 'position' && playerPosition && option.playerYOffset) {
+            const p = JSON.parse(playerPosition);
+            p[1] += option.playerYOffset;
+            value = '[' + p.map(n => n.toFixed(1)).join(', ') + ']';
+          }
+          const nameOnly = appSettings.get('codeCoach') === 'off'
+            || /^\s*:/.test(lineContent.slice(range.endColumn - 1));
+          return {
+            label: option.name, kind: kindMap.Property, range,
+            insertText: nameOnly ? option.name : option.name + ': ' + (value ?? '${1:value}'),
+            insertTextRules: nameOnly || value != null ? undefined
+              : monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            detail: option.type, documentation: option.description,
+            sortText: '0' + option.name,
+            filterText: option.name,
+          };
+        }) };
+      }
+      const beforeWord = context.masked.slice(0, source.length - prefix.length);
+      // Objects and arrays contain keys/values, not global API identifiers.
+      const inValue = context.stack.some(({ ch, index }) => {
+        if (ch === '[') return true;
+        if (ch !== '{') return false;
+        const beforeBrace = context.masked.slice(0, index);
+        const isBlock = /(?:\)|=>|\belse|\btry|\bfinally)\s*$/.test(beforeBrace)
+          || /\bclass(?:\s+[A-Za-z_$][\w$]*)?(?:\s+extends\s+[^{}]+)?\s*$/.test(beforeBrace)
+          || /\bstatic\s*$/.test(beforeBrace);
+        return !isBlock;
+      });
+      if (inValue) return { suggestions: [] };
+      if (/\.\s*$/.test(beforeWord)) {
+        const owner = beforeWord.match(/(?:^|[^\w$.])([A-Za-z_$][\w$]*)\s*\.\s*$/)?.[1];
+        let docs = owner === 'console' ? CONSOLE_DOCS : owner === 'player' ? PLAYER_DOCS : null;
+        const redKeyDocs = memberDocsForSource(beforeWord);
+        if (redKeyDocs) docs = redKeyDocs;
+        if (owner && !docs) {
+          // Infer only directly assigned API results; unknown receivers belong to Monaco.
+          const assignments = [...context.masked.matchAll(/\b(?:const|let|var)\s+([\w$]+)\s*=\s*([\w$]+)\s*\(/g)];
+          const factory = assignments.filter(match => match[1] === owner).at(-1)?.[2];
+          const entry = API_DOCS.find(item => item.label === factory);
+          if (entry?.label === 'getPlayer') docs = PLAYER_DOCS;
+          else if (entry?.label === 'getDoorRed') docs = MEMBER_DOCS.filter(item => item.label === 'lockDoor');
+          else if (entry && (entry.label.startsWith('create') || entry.label === 'findObject')) docs = MEMBER_DOCS;
+        }
+        return { incomplete: true, suggestions: (docs || []).filter(item => matches(item.label))
+          .map(item => toSuggestion(item, range, monaco, lineContent, playerPosition)) };
       }
 
-      return { suggestions: API_DOCS.map(item => toSuggestion(item, range, monaco, lineContent)) };
+      // The next typed word may belong to an options object. Ask Monaco to
+      // refresh this provider instead of only filtering cached global names.
+      if (!prefix || !/(?:^|[;{}(=,!?:]|\breturn|\bawait|=>)\s*$/.test(beforeWord)) return { suggestions: [] };
+      return { incomplete: true, suggestions: [...API_DOCS, ...KEYWORD_DOCS].flatMap(item => {
+        const rank = globalNameMatchRank(item.label, prefix);
+        if (rank < 0) return [];
+        const suggestion = toSuggestion(item, range, monaco, lineContent, playerPosition);
+        return [{ ...suggestion,
+          sortText: '0' + rank + item.label,
+          // Monaco also filters results; anchor discovered words to the typed query.
+          filterText: rank === 0 ? item.label : prefix + ' ' + item.label,
+        }];
+      }) };
     },
   });
 

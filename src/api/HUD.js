@@ -1,3 +1,4 @@
+import { resolveColor } from './resolveColor.js';
 /**
  * HUD.js – Screen text for print(), setText(), clearText().
  *
@@ -43,7 +44,7 @@ export class HUD {
     const el = document.createElement('div');
     el.className = 'hud-text';
     el.textContent = String(text);
-    if (opts.color) el.style.color = opts.color;
+    if (opts.color) el.style.color = resolveColor(opts.color);
     if (opts.size) el.style.fontSize = opts.size + 'px';
     this.overlay.appendChild(el);
 
@@ -68,7 +69,7 @@ export class HUD {
       this.namedTexts.set(id, el);
     }
     el.textContent = String(text);
-    if (opts.color) el.style.color = opts.color;
+    if (opts.color) el.style.color = resolveColor(opts.color);
     if (opts.size) el.style.fontSize = opts.size + 'px';
     if (opts.x !== undefined || opts.y !== undefined) {
       el.style.position = 'absolute';

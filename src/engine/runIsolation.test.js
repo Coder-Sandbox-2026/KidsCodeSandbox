@@ -19,8 +19,35 @@ const { GameEngine } = await import('./GameEngine.js');
 const { GameAPI } = await import('../api/GameAPI.js');
 const { PhysicsManager } = await import('./PhysicsManager.js');
 const { Player } = await import('../api/Player.js');
+const { AudioManager } = await import('../audio/AudioManager.js');
 const { VFXManager } = await import('./VFXManager.js');
 hook.deregister();
+
+test('Run, Reset, level changes and simulation Stop preserve music until explicit music Stop', async t => {
+  const h = await harness(t);
+  const tracks = [];
+  h.engine.audio = new AudioManager(() => {
+    const track = { currentTime: 0, plays: 0, play() { this.plays++; return Promise.resolve(); }, pause() {} };
+    tracks.push(track); return track;
+  });
+  h.engine.audio.playMusic();
+  const track = tracks[0];
+  track.currentTime = 15;
+  h.begin(); h.engine.audio.playMusic();
+  h.engine.reset(); h.engine.audio.playMusic();
+  assert.equal(track.currentTime, 15);
+  assert.equal(track.plays, 1);
+  assert.equal(tracks.length, 1);
+  h.engine.loadLevel('challenge-1');
+  assert.equal(track.currentTime, 15);
+  h.engine.stop();
+  assert.equal(track.currentTime, 15);
+  assert.equal(h.engine.audio.musicActive, true);
+  h.engine.stop();
+  h.engine.audio.stopMusic();
+  assert.equal(track.currentTime, 0);
+  assert.equal(h.engine.audio.musicActive, false);
+});
 
 class Element {
   constructor() { this.children = []; this.style = {}; this.offsetHeight = 16; }
@@ -80,6 +107,38 @@ async function harness(t) {
   });
   return { engine, api, hud, output, begin, invalidate };
 }
+
+test('print observer detects successful runtime calls only', async t => {
+  const h = await harness(t);
+  const { run } = h.begin();
+  let prints = 0;
+  const scope = h.api.buildScope(run, { onPrint: () => prints++ });
+  await run.execute('// print("comment");\nconst text = "print";', scope);
+  assert.equal(prints, 0);
+  await run.execute('const say = print; say("hello");', scope);
+  assert.equal(prints, 1);
+  h.api.hud.print = () => { throw new Error('print failed'); };
+  assert.throws(() => scope.print('failure'), /print failed/);
+  assert.equal(prints, 1);
+});
+
+test('old print observers cannot report after a new run or reset', async t => {
+  const h = await harness(t);
+  const { run } = h.begin();
+  let prints = 0;
+  const oldScope = h.api.buildScope(run, { onPrint: () => prints++ });
+  const gate = deferred();
+  const pending = run.execute('await gate; print("late");', { ...oldScope, gate: gate.promise });
+  const next = h.begin();
+  gate.resolve();
+  await pending;
+  assert.equal(prints, 0);
+  assert.throws(() => oldScope.print('stale'), RunCancelledError);
+  const nextScope = h.api.buildScope(next.run, { onPrint: () => prints++ });
+  h.engine.reset();
+  assert.throws(() => nextScope.print('reset'), RunCancelledError);
+  assert.equal(prints, 0);
+});
 
 for (const action of ['Run', 'Reset', 'Clear']) {
   test(`${action} cancels old wait before createCube (A/B/C)`, async t => {
@@ -149,6 +208,23 @@ test('current API preserves identity, chaining, vector access, callbacks and phy
   assert.equal(h.engine.physics.bodies.size, 0);
 });
 
+test('ignorePlayer suppresses player events but keeps other collision events', async t => {
+  const h = await harness(t);
+  const { scope } = h.begin();
+  const ignored = scope.createCube({ ignorePlayer: true, collision: true });
+  const other = scope.createSphere({ collision: true });
+  let ignoredHits = 0, otherHits = 0, playerHits = 0;
+  ignored.onCollision(() => { ignoredHits++; });
+  other.onCollision(() => { otherHits++; });
+  scope.getPlayer().onCollision(() => { playerHits++; });
+  const [ignoredRaw, otherRaw] = h.api._objects;
+
+  h.engine._notifyCollisionPair(ignoredRaw, h.engine.player);
+  assert.deepEqual([ignoredHits, playerHits], [0, 0]);
+  h.engine._notifyCollisionPair(ignoredRaw, otherRaw);
+  assert.deepEqual([ignoredHits, otherHits], [1, 1]);
+});
+
 test('old update, click, collision, player and keyboard callbacks cannot fire in Run 2 (D)', async t => {
   const h = await harness(t);
   const { scope } = h.begin();
@@ -175,6 +251,27 @@ test('old update, click, collision, player and keyboard callbacks cannot fire in
   current.scope.onKeyPressed('KeyE', hit);
   h.api._emitKey({ code: 'KeyE' }, 'pressed');
   assert.equal(calls, oldCallbacks.length + 1);
+});
+
+test('manually typed and autocomplete-formatted key code execute identically', async t => {
+  const h = await harness(t);
+  const sources = [
+    'onKeyPressed("keyB", () => { print("Hello!"); });',
+    'onKeyPressed("KeyB", () => { print("Hello!"); });',
+  ];
+
+  for (const code of sources) {
+    const { run, scope } = h.begin();
+    await run.execute(code, scope);
+    h.api._emitKey({ code: 'KeyB', key: 'b' }, 'pressed');
+  }
+
+  const { run, scope } = h.begin();
+  document.pointerLockElement = {};
+  h.api._keysDown.add('KeyB');
+  await run.execute('if (isKeyDown("keyB")) print("down");', scope);
+
+  assert.deepEqual(h.output, ['Hello!', 'Hello!', 'down']);
 });
 
 test('async callbacks already in flight cannot mutate a retained player after await', async t => {
@@ -247,7 +344,7 @@ test('Stop keeps ownership, waits and keyboard behavior unchanged', async t => {
   assert.equal(h.engine.userMeshes.length, 1);
 });
 
-for (const method of ['playEmberExplosion', 'playTyphoon']) {
+for (const method of ['playEmberExplosion', 'createTyphoon']) {
   for (const phase of ['textures', 'construction']) {
     for (const action of ['Run', 'Reset', 'Clear']) {
       test(`${method}: ${action} invalidates pending ${phase} (E)`, async t => {
@@ -269,7 +366,7 @@ for (const method of ['playEmberExplosion', 'playTyphoon']) {
         const modules = {
           loadVfxTextures: () => phase === 'textures' ? gate.promise : Promise.resolve({}),
           loadTyphoonTextures: () => phase === 'textures' ? gate.promise : Promise.resolve({}),
-          playEmberExplosion: build, playTyphoon: build,
+          playEmberExplosion: build, createTyphoon: build,
         };
         h.engine.vfx = new VFXManager(h.engine, modules);
         const { run } = h.begin();
@@ -296,13 +393,97 @@ test('current VFX and toolbar VFX still attach to the scene', async t => {
   };
   h.engine.vfx = new VFXManager(h.engine, {
     loadVfxTextures: async () => ({}), loadTyphoonTextures: async () => ({}),
-    playEmberExplosion: build, playTyphoon: build,
+    playEmberExplosion: build, createTyphoon: build,
   });
   const { run, scope } = h.begin();
-  assert.equal(scope.playTyphoon(), undefined, 'public VFX return contract stays void');
-  const effect = await h.engine.vfx.playEmberExplosion({}, run);
+  assert.equal(scope.playTyphoon, undefined, 'Typhoon is hidden from student code');
+  assert.equal(scope.playExplosion(), undefined, 'public VFX return contract stays void');
+  const effect = await h.engine.vfx.createTyphoon({}, run);
   const toolbar = await h.engine.vfx.playEmberExplosion();
   assert.equal(effect.object3D.parent, h.engine.scene);
   assert.equal(toolbar.object3D.parent, h.engine.scene);
   assert.equal(h.engine.vfx._effects.size, 3);
+});
+
+
+import { CHALLENGES } from '../challenges/challengeCatalog.js';
+import { createChallengeValidator } from '../challenges/challengeValidation.js';
+
+test('number print preserves HUD, console, observer, options and undefined return', async t => {
+  const h = await harness(t);
+  const { run } = h.begin();
+  const values = [];
+  const scope = h.api.buildScope(run, { onPrint: value => values.push(value) });
+  assert.equal(scope.print(9, { duration: 0, size: 24 }), undefined);
+  assert.equal(h.hud.children[0].textContent, '9');
+  assert.equal(h.hud.children[0].style.fontSize, '24px');
+  assert.deepEqual(h.output, ['9']);
+  assert.deepEqual(values, [9]);
+  h.api.reset();
+});
+
+test('catalog answers complete through real run/API observations and stale observers cannot complete', async t => {
+  const h = await harness(t);
+  let completions = 0;
+  let oldScope;
+  for (const challenge of CHALLENGES) {
+    const { run } = h.begin();
+    const validator = createChallengeValidator(challenge, challenge.example, {
+      isCurrent: () => run.active, onComplete: () => completions++,
+    });
+    const scope = h.api.buildScope(run, { onCall: validator.observe });
+    const errors = [];
+    await run.execute(challenge.example, scope, { success: validator.succeeded, error: e => errors.push(e) });
+    assert.deepEqual(errors, [], challenge.title);
+    assert.equal(validator.complete, true, challenge.title);
+    oldScope = scope;
+  }
+  assert.equal(completions, CHALLENGES.length);
+  h.begin();
+  assert.throws(() => oldScope.getPlayer(), RunCancelledError);
+  assert.equal(completions, CHALLENGES.length);
+  h.api.reset();
+});
+
+test('only successful console, shape and jump-force calls report; stale player methods are guarded', async t => {
+  const h = await harness(t);
+  const { run } = h.begin();
+  const calls = [];
+  const scope = h.api.buildScope(run, { onCall: (name, value) => calls.push([name, value]) });
+  scope.console.info('not log');
+  const player = scope.getPlayer();
+  assert.throws(() => player.setJumpForce(-1));
+  scope.createSphere();
+  player.setJumpForce(15);
+  scope.console.log('hello');
+  assert.deepEqual(calls.map(([name]) => name), ['getPlayer', 'createSphere', 'setJumpForce', 'console.log']);
+  const setter = player.setJumpForce;
+  h.begin();
+  assert.throws(() => setter(20), RunCancelledError);
+  assert.equal(calls.length, 4);
+});
+
+
+test('placement defaults use live unrounded player coordinates with explicit override and null fallback', async t => {
+  const h = await harness(t);
+  const { scope } = h.begin();
+  // Models use the real ModelFactory with a small cloned visual fixture.
+  h.engine.models = { has: () => true, clone: () => ({ root: new THREE.Group(), colliderParts: [] }) };
+  for (const name of ['createCone', 'createCake']) {
+    h.engine.player.body.setTranslation({ x: 5.25, y: 2, z: -8.75 }, true);
+    const expected = h.engine.getPlayer().position.clone();
+    const object = scope[name]({ collision: false });
+    assert.deepEqual([...object.position.toArray()], expected.toArray());
+    const explicit = [10.12345, 2, -4];
+    assert.deepEqual([...scope[name]({ position: explicit, collision: false }).position.toArray()], explicit);
+    h.engine.player.body.setTranslation({ x: 12.25, y: 4, z: 3 }, true);
+    assert.deepEqual([...scope[name]({ collision: false }).position.toArray()], h.engine.getPlayer().position.toArray());
+  }
+  const getPlayer = h.engine.getPlayer;
+  h.engine.getPlayer = () => null;
+  assert.deepEqual([...scope.createCube().position.toArray()], [0, 0, 0]);
+  assert.deepEqual([...scope.createCake({ collision: false }).position.toArray()], [0, 0, 0]);
+  h.engine.getPlayer = () => { throw Error('not ready'); };
+  assert.deepEqual([...scope.createCube().position.toArray()], [0, 0, 0]);
+  h.engine.getPlayer = getPlayer;
 });

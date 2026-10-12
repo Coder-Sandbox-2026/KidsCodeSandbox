@@ -3,8 +3,15 @@ node_modules/
 dist/
 KidsCode3D.html
 
-
-
+# Development caches and test output. None are shipped with the live app.
+.vite/
+.cache/
+coverage/
+.nyc_output/
+test-results/
+playwright-report/
+*.tsbuildinfo
+.eslintcache
 
 # Local Windows / USB pack. Not used by GitHub Pages.
 offline/
@@ -19,4 +26,15 @@ Thumbs.db
 .vscode/
 .idea/
 *.local
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*~
 .github/copilot-instructions.md
+
+# Accidental root-level shell output / local command artifacts.
+/$_
+/FETCH_HEAD
+/git

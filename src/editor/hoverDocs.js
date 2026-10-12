@@ -100,8 +100,12 @@ export function formatOptionsDisclosure(options = [], { expanded = false } = {})
   return `<details><summary>${SEE_ALL_OPTIONS_LABEL}</summary>${body}</details>`;
 }
 
+function hasDisclosure(entry) {
+  return hasOptionalObjectLiteral(entry) || !!entry?.expandableDoc;
+}
+
 export function resolveHoverExpanded(entry, context) {
-  if (!hasOptionalObjectLiteral(entry)) return false;
+  if (!hasDisclosure(entry)) return false;
   const request = context?.verbosityRequest;
   if (!request) return false;
   const previousLevel = request.previousHover?.canDecreaseVerbosity ? 1 : 0;
@@ -129,7 +133,22 @@ function collapsedHoverBody(entry) {
 export function buildHoverContents(entry, { expanded = false } = {}) {
   if (!entry) return [];
 
-  const contents = [{ value: `**${entry.label}**` }];
+  const heading = entry.kind === 'Function' || entry.kind === 'Method'
+    ? { value: `<strong><span style="color: #f9e2af;">${escapeHtml(entry.label)}</span></strong>`, supportHtml: true }
+    : { value: `**${entry.label}**` };
+  const contents = [heading];
+
+  if (entry.expandableDoc) {
+    contents.push({ value: collapsedDescription(entry) });
+    const body = `<pre><code>${escapeHtml(entry.doc)}</code></pre>`;
+    contents.push({
+      value: expanded
+        ? `<p><a role="button">${HIDE_OPTIONS_LABEL}</a></p>${body}`
+        : `<details><summary>More Info</summary>${body}</details>`,
+      supportHtml: true,
+    });
+    return contents;
+  }
 
   if (!hasOptionalObjectLiteral(entry)) {
     contents.push({ value: simpleHoverBody(entry) });
@@ -147,7 +166,7 @@ export function buildHoverContents(entry, { expanded = false } = {}) {
 /** Full Monaco hover object, including verbosity flags so expand can relayout. */
 export function buildHover(entry, context) {
   const expanded = resolveHoverExpanded(entry, context);
-  const hasOptions = hasOptionalObjectLiteral(entry);
+  const hasOptions = hasDisclosure(entry);
   return {
     contents: buildHoverContents(entry, { expanded }),
     canIncreaseVerbosity: hasOptions && !expanded,

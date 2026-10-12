@@ -83,6 +83,9 @@ export function resolveCompletionInsert(item, level, {
   }
   const lvl = CODE_COACH_LEVELS.includes(level) ? level : 'high';
   let insertText = completion[lvl] ?? (lvl === 'off' ? name : completion.basic ?? name);
+  if (completion.kind === 'statement') {
+    return { insertText, isSnippet: /\$\{\d/.test(insertText) };
+  }
   if (shouldEndWithSemicolon(line, wordStartColumn, wordEndColumn, insertText)) {
     insertText = withStatementSemicolon(insertText);
   }

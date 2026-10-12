@@ -1,13 +1,18 @@
+import { placementPosition } from './placementPosition.js';
 /**
  * ModelFactory.js – Kid-friendly helpers that place preloaded GLB models
  * in the scene, just like createCube / createSphere.
  */
 import { GameObject } from './GameObject.js';
-import { CAKE_MODEL, GOLD_COIN_MODEL } from '../engine/ModelLoader.js';
+import { CAKE_MODEL, GOLD_COIN_MODEL, GOLD_STAR_MODEL, RED_KEY_MODEL } from '../engine/ModelLoader.js';
+import { GoldStar } from './GoldStar.js';
+import { GoldCoin } from './GoldCoin.js';
+import { RedKey } from './RedKey.js';
+import { configureImportedShadows } from '../engine/importedShadows.js';
 
-function applyCommonOptions(root, opts = {}) {
-  if (opts.position) {
-    const p = opts.position;
+function applyCommonOptions(root, engine, opts = {}) {
+  const p = placementPosition(engine, opts.position);
+  if (p) {
     root.position.set(p[0] ?? 0, p[1] ?? 0, p[2] ?? 0);
   }
   if (opts.scale !== undefined) {
@@ -16,9 +21,10 @@ function applyCommonOptions(root, opts = {}) {
     else root.scale.set(s, s, s);
   }
   if (opts.name) root.name = opts.name;
+  if (opts.rotation) root.rotation.set(...opts.rotation);
 }
 
-function spawnCollectible(engine, modelId, defaultName, opts = {}) {
+function spawnCollectible(engine, modelId, defaultName, opts = {}, ItemClass = GameObject) {
   if (!engine.models?.has(modelId)) {
     const extra = engine.modelLoadError?.message
       ? ` ${engine.modelLoadError.message}`
@@ -27,19 +33,22 @@ function spawnCollectible(engine, modelId, defaultName, opts = {}) {
   }
 
   const { root, colliderParts } = engine.models.clone(modelId);
-  applyCommonOptions(root, opts);
+  applyCommonOptions(root, engine, opts);
   if (!opts.name) root.name = defaultName;
 
   engine.scene.add(root);
+  configureImportedShadows(root, { scene: engine.scene });
 
   const wantPhysics = !!opts.physics;
   // Collectibles are detectable by default so onCollision works without extra setup.
   const wantCollision = opts.collision !== false;
 
-  const obj = new GameObject(root, engine, null, {
+  const obj = new ItemClass(root, engine, null, {
     collision: wantCollision && !wantPhysics,
     colliderParts,
     ownsGeometry: false,
+    ignorePlayer: opts.ignorePlayer,
+    stageOwned: opts.stageOwned === true,
   });
   if (opts.name) obj.name = opts.name;
   if (opts.color) obj.setColor(opts.color);
@@ -62,7 +71,9 @@ export function createModelFactories(engine) {
    * fall or get pushed unless you call enablePhysics().
    */
   function createGoldCoin(opts = {}) {
-    return spawnCollectible(engine, GOLD_COIN_MODEL, 'goldCoin', opts);
+    const position = placementPosition(engine, opts.position);
+    if (opts.position === undefined) position[1] += 0.5;
+    return spawnCollectible(engine, GOLD_COIN_MODEL, 'goldCoin', { ...opts, position }, GoldCoin);
   }
 
   /**
@@ -73,5 +84,15 @@ export function createModelFactories(engine) {
     return spawnCollectible(engine, CAKE_MODEL, 'cake', opts);
   }
 
-  return { createGoldCoin, createCake };
+  function createGoldStar(opts = {}) {
+    return spawnCollectible(engine, GOLD_STAR_MODEL, 'goldStar', {
+      ...opts, scale: opts.scale ?? 0.20,
+    }, GoldStar);
+  }
+
+  function createRedKey(opts = {}) {
+    return spawnCollectible(engine, RED_KEY_MODEL, 'keyRed', opts, RedKey);
+  }
+
+  return { createGoldCoin, createCake, createGoldStar, createRedKey };
 }

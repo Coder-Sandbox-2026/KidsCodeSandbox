@@ -169,7 +169,7 @@ src/
 │   ├── PhysicsManager.js    # Rapier physics world + sync
 │   ├── collisionMeshes.js   # COL_* solid + ITEM_* detect-only helpers
 │   ├── ModelLoader.js       # Preload / clone GLB models
-│   ├── Actor.js             # Shared identity for GameObject and Player
+│   ├── Actor.js             # Internal shared identity for game objects and Player
 │   ├── InputSystem.js       # Keyboard / mouse input for controllers
 │   ├── FirstPersonMovementController.js
 │   ├── FirstPersonCameraController.js
@@ -180,7 +180,7 @@ src/
 │   ├── ShapeFactory.js      # createCube/Sphere/Cone/Cylinder/Plane
 │   ├── ModelFactory.js      # createGoldCoin / createCake GLB models
 │   ├── GameObject.js        # Wrapper: Three.js mesh + Rapier body
-│   ├── Player.js            # First-class player actor + settings API
+│   ├── Player.js            # First-class player + settings API
 │   └── HUD.js              # Screen text overlay
 ├── assets/                  # Local 3D files (temporary debug source)
 │   ├── assetSource.js       # Relative GLB + Basis decoder URLs (GitHub Pages-safe)

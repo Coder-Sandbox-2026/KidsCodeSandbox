@@ -1,4 +1,6 @@
 /** Application-owned generations. This guards the game API, not browser globals. */
+import { createLoopGuard, instrumentLoops } from './loopGuard.js';
+
 export class RunCancelledError extends Error {
   constructor() {
     super('This student run is no longer active.');
@@ -141,11 +143,14 @@ class StudentRun {
   async execute(code, scope, { success, error } = {}) {
     try {
       this.assertActive();
+      const loopGuardName = '__kidsCodeLoopTick';
+      const guardedCode = instrumentLoops(code, loopGuardName);
       const execute = new Function(
+        loopGuardName,
         ...Object.keys(scope),
-        `"use strict"; return (async () => {\n${code}\n})();`
+        `"use strict"; return (async () => {\n${guardedCode}\n})();`
       );
-      await execute(...Object.values(scope));
+      await execute(createLoopGuard(), ...Object.values(scope));
       if (this.active) success?.();
     } catch (cause) {
       if (this.active && !(cause instanceof RunCancelledError)) error?.(cause);

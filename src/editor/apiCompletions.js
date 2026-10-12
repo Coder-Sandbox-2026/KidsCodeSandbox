@@ -15,6 +15,7 @@
  * can show a collapsed summary plus "See all options".
  */
 import { optionField } from './hoverDocs.js';
+import { DEBUG_GOLD_STAR_ENABLED } from '../debug/debugGoldStarConfig.js';
 
 export function call(name, guided, high = guided, extras = {}) {
   return { kind: 'token', off: name, basic: `${name}()`, guided, high, ...extras };
@@ -30,17 +31,32 @@ export function ident(name, assigned) {
   };
 }
 
+export function statement(name, basic, guided, high) {
+  return { label: name, kind: 'Keyword', detail: `Insert a ${name} statement`, doc: high, completion: {
+    kind: 'statement', off: name, basic, guided, high,
+  } };
+}
+
 /** Options for createCube / createSphere / createCone / createCylinder / createPlane / createGoldCoin / createCake */
 export const SHAPE_OPTIONS = [
   optionField('position', '[x, y, z]', 'Where to put the object in the world.', { example: '[0, 3, -5]' }),
-  optionField('scale', 'a number or [x, y, z]', 'How big the object is.', { example: '2' }),
+  optionField('rotation', '[x, y, z] degrees', 'Rotation uses degrees, such as [0, 90, 0].', { example: '[0, 90, 0]' }),
+  optionField('scale', 'a number or [x, y, z]', 'Size in percent: 100 is normal, 50 is half, 200 is double.', { example: '100' }),
   optionField('color', 'text', 'A color name like "red" or a hex code like "#ff0000".', { example: '"red"' }),
   optionField('physics', 'true or false', 'If true, the object falls and can be pushed.', { example: 'true' }),
   optionField('collision', 'true or false', 'If true, the object notices when something touches it. This does not make it fall.', { example: 'true' }),
+  optionField('ignorePlayer', 'true or false', 'If true, player touches do not run collision events or native collection actions. Physical blocking is unchanged.', { example: 'true' }),
   optionField('mass', 'a number', 'How heavy the object is when physics is on.', { example: '1' }),
   optionField('name', 'text', 'A name so you can find the object later.', { example: '"box"' }),
   optionField('bounciness', 'a number from 0 to 1', 'How much the object bounces.', { example: '0.5' }),
   optionField('friction', 'a number from 0 to 1', 'How much the object grips when it slides.', { example: '0.5' }),
+  optionField('duration', 'a number', 'How many seconds the object stays before disappearing.', { example: '5' }),
+];
+
+export const LIGHT_SHAPE_OPTIONS = [
+  ...SHAPE_OPTIONS,
+  optionField('lightIntensity', 'a number from 0 to 10', 'Brightness of the real point light. Default 2.', { example: '2' }),
+  optionField('lightRadius', 'a number above 0, up to 30', 'How far the light reaches. Default 8.', { example: '8' }),
 ];
 
 /** Options for print() and setText() */
@@ -52,17 +68,10 @@ export const PRINT_OPTIONS = [
   optionField('duration', 'a number', 'How many seconds the text stays on screen. Default is 10. Use 0 to keep it forever.', { example: '30' }),
 ];
 
-/** Options for playExplosion() / playEmberExplosion() */
+/** Options for playExplosion() */
 export const EXPLOSION_OPTIONS = [
   optionField('position', '[x, y, z]', 'Where the explosion happens. Skip this to play it in front of you.', { example: '[0, 2, -8]' }),
   optionField('radius', 'a number', 'How wide the blast is. Default is 3. The biggest you can use is 10.', { example: '3' }),
-];
-
-/** Options for playTyphoon() */
-export const TYPHOON_OPTIONS = [
-  optionField('position', '[x, y, z]', 'Where the typhoon happens. Skip this to play it on the ground in front of you.', { example: '[0, 0, -8]' }),
-  optionField('duration', 'a number', 'How many seconds the tornado stays up. Default is 8.', { example: '8' }),
-  optionField('radius', 'a number', 'How wide the shockwave base is. Default is 1. The biggest you can use is 10.', { example: '1' }),
 ];
 
 export const ENABLE_PHYSICS_OPTIONS = [
@@ -95,6 +104,50 @@ export const PLAYER_SETTING_OPTIONS = [
 /** Global API completions */
 export const API_DOCS = [
   {
+    label: 'getDoorRed', kind: 'Function', detail: 'Get the red door, if there is one',
+    doc: "getDoorRed()\n\nGets the red door in this level, or null if there isn't one.",
+    completion: call('getDoorRed', 'getDoorRed()'),
+  },
+  {
+    label: 'getKeyRed', kind: 'Function', detail: 'Get the red key, if there is one',
+    doc: "getKeyRed()\n\nGets the first Red Key in this level, or null if there isn't one.\nUse key.onCollision(callback) to run code when the player touches it.",
+    completion: call('getKeyRed', 'getKeyRed()'),
+  },
+  {
+    label: 'getPlayerPosition', kind: 'Function', detail: 'Get where you are',
+    doc: 'getPlayerPosition()\n\nReturns your player body position as a fresh [x, y, z] array.\n\nExample:\nprint(getPlayerPosition());',
+    completion: call('getPlayerPosition', 'getPlayerPosition()'),
+  },
+  {
+    label: 'setPlayerPosition', kind: 'Function', detail: 'Move yourself to a position',
+    doc: 'setPlayerPosition([x, y, z])\n\nTeleports your player body and stops its movement. Your view follows at eye height. Use three finite numbers.\n\nExample:\nsetPlayerPosition([0, 5, -10]);',
+    completion: call('setPlayerPosition', 'setPlayerPosition([${1:0}, ${2:5}, ${3:-10}])'),
+  },
+  {
+    label: 'getPlayerDirection', kind: 'Function', detail: 'Get which way you face',
+    doc: 'getPlayerDirection()\n\nReturns a fresh horizontal [x, 0, z] direction with length 1. Looking up or down does not change it. Forward starts along -Z.\n\nExample:\nprint(getPlayerDirection());',
+    completion: call('getPlayerDirection', 'getPlayerDirection()'),
+  },
+  {
+    label: 'getPlayerLookDirection', kind: 'Function', detail: 'Gets the direction the player is looking, including up and down.',
+    doc: 'getPlayerLookDirection()\n\nReturns a fresh [x, y, z] direction with length 1. It follows the camera when you look up or down.\n\nExample:\nball.move(getPlayerLookDirection(), 20);',
+    completion: call('getPlayerLookDirection', 'getPlayerLookDirection()'),
+  },
+  {
+    label: 'setPlayerDirection', kind: 'Function', detail: 'Choose which way you face',
+    doc: 'setPlayerDirection([x, y, z])\n\nFaces you horizontally in this direction, keeping how far you look up or down. Y is ignored; X and Z cannot both be zero. Use three finite numbers.\n\nExample:\nsetPlayerDirection([1, 0, 0]);',
+    completion: call('setPlayerDirection', 'setPlayerDirection([${1:1}, ${2:0}, ${3:0}])'),
+  },
+  // Placement API uses the same gate as the runtime scope and Monaco declarations.
+  ...(DEBUG_GOLD_STAR_ENABLED ? [{
+    label: 'createGoldStar',
+    kind: 'Function',
+    detail: 'Place a spinning gold star',
+    doc: 'createGoldStar(options?)\n\nPlaces a GoldStar with pulsing glow and glitter.\nReturns a GoldStar GameObject with the usual position, rotation, scale and object methods.\nTouch detection is on by default; physics is off.\nDefault scale: 20%. Spins on Y at 0.01 radians per frame.\nUse getSpinRate() and setSpinRate(rate) to read or change spin.\nPlayer contact destroys the star.\n\nExample:\nconst star = createGoldStar({ position: [0, 2, 0], scale: 20 });',
+    options: SHAPE_OPTIONS,
+    completion: call('createGoldStar', 'createGoldStar({\n\tscale: 20\n})'),
+  }] : []),
+  {
     label: 'createCube',
     kind: 'Function',
     detail: 'Create a cube in the game world',
@@ -102,8 +155,8 @@ export const API_DOCS = [
     options: SHAPE_OPTIONS,
     completion: call(
       'createCube',
-      'createCube({\n\tposition: [0, 3, -5],\n\tcolor: "${1:red}"\n})',
-      'createCube({\n\tposition: [0, 3, -5],\n\tcolor: "${1:red}",\n\tphysics: true\n})'
+      'createCube({\n\tcolor: "${1:red}"\n})',
+      'createCube({\n\tcolor: "${1:red}",\n\tphysics: true\n})'
     ),
   },
   {
@@ -114,8 +167,8 @@ export const API_DOCS = [
     options: SHAPE_OPTIONS,
     completion: call(
       'createSphere',
-      'createSphere({\n\tposition: [0, 3, -5],\n\tcolor: "${1:blue}"\n})',
-      'createSphere({\n\tposition: [0, 3, -5],\n\tcolor: "${1:blue}",\n\tphysics: true\n})'
+      'createSphere({\n\tcolor: "${1:blue}"\n})',
+      'createSphere({\n\tcolor: "${1:blue}",\n\tphysics: true\n})'
     ),
   },
   {
@@ -126,8 +179,8 @@ export const API_DOCS = [
     options: SHAPE_OPTIONS,
     completion: call(
       'createCone',
-      'createCone({\n\tposition: [0, 3, -5],\n\tcolor: "${1:green}"\n})',
-      'createCone({\n\tposition: [0, 3, -5],\n\tcolor: "${1:green}",\n\tphysics: true\n})'
+      'createCone({\n\tcolor: "${1:green}"\n})',
+      'createCone({\n\tcolor: "${1:green}",\n\tphysics: true\n})'
     ),
   },
   {
@@ -138,10 +191,22 @@ export const API_DOCS = [
     options: SHAPE_OPTIONS,
     completion: call(
       'createCylinder',
-      'createCylinder({\n\tposition: [0, 3, -5],\n\tcolor: "${1:yellow}"\n})',
-      'createCylinder({\n\tposition: [0, 3, -5],\n\tcolor: "${1:yellow}",\n\tphysics: true\n})'
+      'createCylinder({\n\tcolor: "${1:yellow}"\n})',
+      'createCylinder({\n\tcolor: "${1:yellow}",\n\tphysics: true\n})'
     ),
   },
+  ...['Cube', 'Sphere', 'Cone', 'Cylinder'].map(shape => ({
+    label: `createLight${shape}`,
+    kind: 'Function',
+    detail: `Create a glowing ${shape.toLowerCase()} with a real light`,
+    doc: `createLight${shape}(options)\n\nCreates a ${shape.toLowerCase()} with visible emission and a shadow-free point light matching its color. It otherwise behaves like the standard shape.\n\nDefaults: lightIntensity 2, lightRadius 8. Limits: 10 active light shapes, intensity 0–10, radius above 0–30, and scale above 0–500%. Returns null when the active-light limit is reached. Destroying lights or resetting the scene restores the budget.\n\nExample:\nconst light = createLight${shape}({ color: "cyan", lightIntensity: 3, lightRadius: 10 });`,
+    options: LIGHT_SHAPE_OPTIONS,
+    completion: call(
+      `createLight${shape}`,
+      `createLight${shape}({\n\tcolor: "cyan"\n})`,
+      `createLight${shape}({\n\tcolor: "cyan",\n\tlightIntensity: \${1:2},\n\tlightRadius: \${2:8}\n})`
+    ),
+  })),
   {
     label: 'createPlane',
     kind: 'Function',
@@ -150,20 +215,20 @@ export const API_DOCS = [
     options: SHAPE_OPTIONS,
     completion: call(
       'createPlane',
-      'createPlane({\n\tposition: [0, 0, -5],\n\tcolor: "${1:white}"\n})',
-      'createPlane({\n\tposition: [0, 0, -5],\n\tcolor: "${1:white}"\n})'
+      'createPlane({\n\tcolor: "${1:white}"\n})',
+      'createPlane({\n\tcolor: "${1:white}"\n})'
     ),
   },
   {
     label: 'createGoldCoin',
     kind: 'Function',
     detail: 'Place a gold coin you can collect',
-    doc: 'createGoldCoin(options)\n\nPlaces a gold coin in the world.\nIt notices when the player touches it, but it does not fall\nor get pushed (unless you call enablePhysics()).\n\nOptions: position, scale, color, name, collision, physics\n\nExample:\nconst coin = createGoldCoin({ position: [0, 1, 2] });\ncoin.onCollision((other) => {\n  if (other && other.isPlayer()) {\n    coin.destroy();\n    print("You got a coin!");\n  }\n});',
-    options: SHAPE_OPTIONS,
+    doc: 'createGoldCoin(options?)\n\nPlaces a spinning, collectible coin. Default position is your body position with Y + 0.5. Scale uses percentages: 100 normal, 50 half, 200 double. Rotation uses degrees. A coin spawned touching you arms after you leave it; returning collects it with a sound.\n\nExample:\nconst coin = createGoldCoin({ scale: 70 });\ncoin.setSpinRate(2);',
+    options: SHAPE_OPTIONS.map(option => option.name === 'position' ? { ...option, playerYOffset: 0.5 } : option),
     completion: call(
       'createGoldCoin',
-      'createGoldCoin({\n\tposition: [0, 1, 2]\n})',
-      'createGoldCoin({\n\tposition: [0, 1, 2]\n})'
+      'createGoldCoin()',
+      'createGoldCoin({\n\tscale: ${1:100}\n})'
     ),
   },
   {
@@ -174,8 +239,8 @@ export const API_DOCS = [
     options: SHAPE_OPTIONS,
     completion: call(
       'createCake',
-      'createCake({\n\tposition: [0, 1, 2]\n})',
-      'createCake({\n\tposition: [0, 1, 2]\n})'
+      'createCake()',
+      'createCake()'
     ),
   },
   {
@@ -190,30 +255,7 @@ export const API_DOCS = [
       'playExplosion({\n\tposition: [0, 2, -8],\n\tradius: ${1:3}\n})'
     ),
   },
-  {
-    label: 'playEmberExplosion',
-    kind: 'Function',
-    detail: 'Play the ember explosion effect (same as playExplosion)',
-    doc: 'playEmberExplosion(options)\n\nSame as playExplosion(). This is the VFX module calling method.',
-    options: EXPLOSION_OPTIONS,
-    completion: call(
-      'playEmberExplosion',
-      'playEmberExplosion()',
-      'playEmberExplosion({\n\tposition: [0, 2, -8],\n\tradius: ${1:3}\n})'
-    ),
-  },
-  {
-    label: 'playTyphoon',
-    kind: 'Function',
-    detail: 'Play the typhoon water-tornado effect',
-    doc: 'playTyphoon(options)\n\nPlays a water typhoon in the 3D world.\nWith no arguments, it plays on the ground in front of you.\nYou can also pass a player or object to play it there.\n\nOptions: position, duration, radius\n\nExample:\nplayTyphoon();\nplayTyphoon({ position: [0, 0, -8], duration: 8, radius: 1 });\nonKeyPressed("KeyT", () => playTyphoon());',
-    options: TYPHOON_OPTIONS,
-    completion: call(
-      'playTyphoon',
-      'playTyphoon()',
-      'playTyphoon({\n\tposition: [0, 0, -8],\n\tduration: ${1:8},\n\tradius: ${2:1}\n})'
-    ),
-  },
+
   {
     label: 'print',
     kind: 'Function',
@@ -241,7 +283,7 @@ export const API_DOCS = [
     label: 'update',
     kind: 'Function',
     detail: 'Run code every frame',
-    doc: 'update(callback)\n\nCalls your function every frame.\n\nExample:\nupdate((dt) => {\n  cube.rotation.y += 0.02;\n});',
+    doc: 'update(callback)\n\nCalls your function every frame.\n\nExample:\nupdate((dt) => {\n  cube.rotation.y += 1;\n});',
     completion: call('update', 'update((${1:dt}) => {\n\t${0}\n})'),
   },
   {
@@ -290,7 +332,7 @@ export const API_DOCS = [
     label: 'getPlayer',
     kind: 'Function',
     detail: 'Get the player you control',
-    doc: 'getPlayer()\n\nReturns the player actor (the person you walk around as).\nUse this to change walk speed, jump, or check if you are on the ground.\n\nExample:\nconst player = getPlayer();\nplayer.setWalkSpeed(8);\nif (player.isGrounded()) {\n  print("Standing!");\n}',
+    doc: 'getPlayer()\n\nReturns the player character (the person you walk around as).\nUse this to change walk speed, jump, or check if you are on the ground.\n\nExample:\nconst player = getPlayer();\nplayer.setWalkSpeed(8);\nif (player.isGrounded()) {\n  print("Standing!");\n}',
     completion: call('getPlayer', 'getPlayer()'),
   },
   {
@@ -324,20 +366,45 @@ export const API_DOCS = [
   {
     label: 'console',
     kind: 'Property',
-    detail: 'Print a message in the Console panel',
+    detail: 'Lets your code send useful messages to the Console.',
+    expandableDoc: true,
     doc: 'console.log(message)\n\nSafe console methods:\n  log, info, debug, warn, error\n  clear, assert, table\n  time, timeLog, timeEnd\n  count, countReset\n  group, groupCollapsed, groupEnd',
     completion: ident('console'),
   },
 ];
 
+/** Beginner-friendly JavaScript statement templates. */
+export const KEYWORD_DOCS = [
+  statement('if', 'if (condition) {\n\t\n}', 'if (${1:condition}) {\n\t${0}\n}', '// Check if a condition is true\nif (${1:condition}) {\n\t// Code here runs when the condition is true\n\t${0}\n}'),
+  statement('for', 'for (;;) {\n\t\n}', 'for (let i = 0; i < ${1:5}; i++) {\n\t${0}\n}', '// Repeat this code 5 times\nfor (let i = 0; i < ${1:5}; i++) {\n\t// Code to repeat\n\t${0}\n}'),
+  statement('while', 'while (condition) {\n\t\n}', 'while (${1:condition}) {\n\t${0}\n}', '// Repeat while this condition is true\nwhile (${1:condition}) {\n\t// Code to repeat\n\t// Make sure the condition can eventually become false\n\t${0}\n}'),
+];
+
 /** Object member completions (shown after cube.) */
 export const MEMBER_DOCS = [
+  {
+    label: 'lockDoor', kind: 'Method', detail: 'Lock or unlock a door',
+    doc: 'door.lockDoor(locked)\n\nUse true to lock the door or false to unlock it.',
+    completion: call('lockDoor', 'lockDoor(${1:true})'),
+  },
+  { label: 'getSpinRate', kind: 'Method', detail: 'Read collectible spin rate', doc: 'star.getSpinRate()\n\nGoldCoin: speed multiplier, default 1. GoldStar: radians per frame, default 0.01.', completion: call('getSpinRate', 'getSpinRate()') },
+  { label: 'setSpinRate', kind: 'Method', detail: 'Set collectible spin rate', doc: 'star.setSpinRate(rate)\n\nGoldCoin uses a speed multiplier: 0 stops, 0.5 half, 1 normal, 2 double. GoldStar uses radians per frame. Use 0 to stop or a negative number to reverse. Returns the star.', completion: call('setSpinRate', 'setSpinRate(${1:0.01})') },
+  {
+    label: 'move', kind: 'Method', detail: 'Pushes the object in a direction.',
+    doc: 'object.move(direction, force)\n\ndirection — The direction the object should move.\nforce — The requested change in speed.\n\nThe direction is adjusted to length 1, and mass is accounted for so the same force gives the same acceleration at every scale. Physics turns on automatically if needed.\n\nExample:\nball.move(getPlayerLookDirection(), 20);',
+    completion: call('move', 'move(${1:direction}, ${2:5})'),
+  },
+
   { label: 'position', kind: 'Property', detail: 'Object position (x, y, z)', completion: ident('position') },
-  { label: 'rotation', kind: 'Property', detail: 'Object rotation (x, y, z)', completion: ident('rotation') },
-  { label: 'scale', kind: 'Property', detail: 'Object scale (x, y, z)', completion: ident('scale') },
+  { label: 'rotation', kind: 'Property', detail: 'Object rotation in degrees (x, y, z)', completion: ident('rotation') },
+  { label: 'scale', kind: 'Property', detail: 'Object scale in percent (100 is normal)', completion: ident('scale') },
   { label: 'color', kind: 'Property', detail: 'Set object color', completion: ident('color', 'color = "${1:red}"') },
+  { label: 'lightIntensity', kind: 'Property', detail: 'Light brightness (0 to 10)', doc: 'light.lightIntensity\n\nReads or changes light brightness. Must be finite and from 0 to 10.', completion: ident('lightIntensity', 'lightIntensity = ${1:2}') },
+  { label: 'lightRadius', kind: 'Property', detail: 'Light reach (above 0 to 30)', doc: 'light.lightRadius\n\nReads or changes how far the light reaches. Must be finite, above 0, and no more than 30.', completion: ident('lightRadius', 'lightRadius = ${1:8}') },
   { label: 'setColor', kind: 'Method', detail: 'Set object color', completion: call('setColor', 'setColor("${1:red}")') },
-  { label: 'setScale', kind: 'Method', detail: 'Set object scale', completion: call('setScale', 'setScale(${1:1}, ${2:1}, ${3:1})') },
+  { label: 'setLightIntensity', kind: 'Method', detail: 'Set light brightness (0 to 10)', doc: 'light.setLightIntensity(value)\n\nSets bounded light brightness and returns the light shape.', completion: call('setLightIntensity', 'setLightIntensity(${1:2})') },
+  { label: 'setLightRadius', kind: 'Method', detail: 'Set light reach (above 0 to 30)', doc: 'light.setLightRadius(value)\n\nSets bounded light reach and returns the light shape.', completion: call('setLightRadius', 'setLightRadius(${1:8})') },
+  { label: 'setScale', kind: 'Method', detail: 'Set object scale in percent', completion: call('setScale', 'setScale(${1:100}, ${2:100}, ${3:100})') },
   { label: 'rotate', kind: 'Method', detail: 'Rotate by degrees', completion: call('rotate', 'rotate(${1:0}, ${2:45}, ${3:0})') },
   {
     label: 'enablePhysics',
@@ -394,7 +461,7 @@ export const MEMBER_DOCS = [
     kind: 'Method',
     detail: 'Run code when this object starts touching something',
     doc: 'object.onCollision(callback)\n\nRuns your function once when this object starts touching something.\nIt does not keep firing every frame while they stay touching.\n`other` is the thing you hit (use other.isPlayer() for the player),\nor null for the ground or level.\n\nThis turns on collision detection. It does NOT turn on gravity.\nCollectibles (coins, cake) already detect touches by default.\n\nExample:\ncoin.onCollision((other) => {\n  if (other && other.isPlayer()) {\n    coin.destroy();\n    print("You got the coin!");\n  }\n});',
-    completion: call('onCollision', 'onCollision((${1:other}) => {\n\t${0}\n})'),
+    completion: call('onCollision', 'onCollision((${1:other}) => {\n\t// Run this code when this object touches something\n\tif (${1:other}) {\n\t\t// ${1:other} is the object that was touched\n\t\t${0}\n\t}\n})'),
   },
   {
     label: 'isPlayer',
@@ -473,6 +540,7 @@ export function findCompletion(label, catalog = API_DOCS) {
 
 export function findHoverEntry(word) {
   return API_DOCS.find((d) => d.label === word)
+    || KEYWORD_DOCS.find((d) => d.label === word)
     || CONSOLE_DOCS.find((d) => d.label === word)
     || PLAYER_DOCS.find((d) => d.label === word)
     || MEMBER_DOCS.find((d) => d.label === word)

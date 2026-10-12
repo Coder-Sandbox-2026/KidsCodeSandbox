@@ -2,13 +2,17 @@
  * Type declarations injected into Monaco so createCube, print, etc. get
  * IntelliSense, hover docs, and parameter hints.
  */
+import { DEBUG_GOLD_STAR_ENABLED } from '../debug/debugGoldStarConfig.js';
+
 export const GAME_API_DTS = `
 /** Options for creating a 3D shape. */
 interface ShapeOptions {
   /** Position in the world, like [0, 3, -5] */
   position?: [number, number, number] | number[];
-  /** Size, like [2, 2, 2] or a single number */
+  /** Size in percent: 100 normal, 50 half, 200 double */
   scale?: [number, number, number] | number[] | number;
+  /** Rotation in degrees, e.g. [0, 90, 0]. */
+  rotation?: [number, number, number];
   /** CSS name ("red") or hex ("#ff0000") */
   color?: string;
   /** If true, the object falls and can be pushed */
@@ -18,10 +22,21 @@ interface ShapeOptions {
    * This does not make it fall. Collectibles (coins, cake) default to true.
    */
   collision?: boolean;
+  /** Suppress player collision events/native collection while keeping physical contact. */
+  ignorePlayer?: boolean;
   mass?: number;
   name?: string;
   bounciness?: number;
   friction?: number;
+  /** How many seconds the object stays before disappearing. */
+  duration?: number;
+}
+
+interface LightShapeOptions extends ShapeOptions {
+  /** Point-light brightness. Default 2; range 0 to 10. */
+  lightIntensity?: number;
+  /** Point-light reach. Default 8; above 0 and at most 30. */
+  lightRadius?: number;
 }
 
 interface Vec3 {
@@ -51,20 +66,22 @@ interface PlayerSettings {
 }
 
 /** Shared identity for things in the game (shapes and the player). */
-interface Actor {
+interface GameObjectLike {
   position: Vec3;
   name: string;
   /** True only for the active player. */
   isPlayer(): boolean;
   /**
-   * Runs when this actor starts touching something.
+   * Runs when this game object starts touching something.
    * other is the player, another object, or null for the ground / level.
    */
-  onCollision(fn: (other: Actor | null) => void): this;
+  onCollision(fn: (other: GameObjectLike | null) => void): this;
 }
 
-interface GameObject extends Actor {
+interface GameObject extends GameObjectLike {
+  /** Rotation components in degrees. */
   rotation: Vec3;
+  /** Scale components in percent: 100 is normal. */
   scale: Vec3;
   color: string;
   mass: number;
@@ -75,9 +92,12 @@ interface GameObject extends Actor {
   /** True when this object notices touches (even if it does not fall) */
   collisionEnabled: boolean;
   setColor(color: string): GameObject;
+  /** Set scale percentages: 100 normal, 50 half, 200 double. */
   setScale(x: number, y?: number, z?: number): GameObject;
   /** Rotate in degrees */
   rotate(x: number, y: number, z: number): GameObject;
+  /** Scale-independent velocity change: equal force gives equal acceleration at every scale. */
+  move(direction: [number, number, number] | number[], force: number): GameObject;
   enablePhysics(opts?: { mass?: number; bounciness?: number; friction?: number }): GameObject;
   disablePhysics(): GameObject;
   setPhysics(opts: { enabled?: boolean; mass?: number; bounciness?: number; friction?: number } | boolean): GameObject;
@@ -89,7 +109,28 @@ interface GameObject extends Actor {
   onClick(fn: (event: ClickEvent) => void): GameObject;
 }
 
-interface Player extends Actor {
+interface LightGameObject extends GameObject {
+  lightIntensity: number;
+  lightRadius: number;
+  setLightIntensity(value: number): LightGameObject;
+  setLightRadius(value: number): LightGameObject;
+}
+
+interface GoldCoin extends GameObject {
+  /** Spin speed multiplier: 0 stop, 0.5 half, 1 normal, 2 double. */
+  getSpinRate(): number;
+  setSpinRate(rate: number): this;
+}
+
+interface GoldStar extends GameObject {
+  /** Y rotation in radians per frame; default 0.01 */
+  getSpinRate(): number;
+  setSpinRate(rate: number): this;
+}
+
+interface RedKey extends GameObjectLike {}
+
+interface Player extends GameObjectLike {
   isGrounded(): boolean;
   setSettings(settings: PlayerSettings): Player;
   getSettings(): PlayerSettings;
@@ -113,6 +154,11 @@ interface Player extends Actor {
   getMovementEnabled(): boolean;
 }
 
+interface Door {
+  /** Lock or unlock the door without moving it. */
+  lockDoor(locked: boolean): Door;
+}
+
 interface PrintOptions {
   x?: number;
   y?: number;
@@ -126,9 +172,22 @@ declare function createCube(options?: ShapeOptions): GameObject;
 declare function createSphere(options?: ShapeOptions): GameObject;
 declare function createCone(options?: ShapeOptions): GameObject;
 declare function createCylinder(options?: ShapeOptions): GameObject;
+/** Emissive cube with a shadow-free point light. Returns null after 10 active lights. Scale max: 500%. */
+declare function createLightCube(options?: LightShapeOptions): LightGameObject | null;
+/** Emissive sphere with a shadow-free point light. Returns null after 10 active lights. Scale max: 500%. */
+declare function createLightSphere(options?: LightShapeOptions): LightGameObject | null;
+/** Emissive cone with a shadow-free point light. Returns null after 10 active lights. Scale max: 500%. */
+declare function createLightCone(options?: LightShapeOptions): LightGameObject | null;
+/** Emissive cylinder with a shadow-free point light. Returns null after 10 active lights. Scale max: 500%. */
+declare function createLightCylinder(options?: LightShapeOptions): LightGameObject | null;
 declare function createPlane(options?: ShapeOptions): GameObject;
-declare function createGoldCoin(options?: ShapeOptions): GameObject;
+declare function createGoldCoin(options?: ShapeOptions): GoldCoin;
+declare function getKeyRed(): RedKey | null;
+${DEBUG_GOLD_STAR_ENABLED ? `/** Development only: a gold star with pulsing glow and glitter. Collision defaults on; physics defaults off. */
+declare function createGoldStar(options?: ShapeOptions): GoldStar;` : ''}
 declare function createCake(options?: ShapeOptions): GameObject;
+/** Gets the red door in this level, or null if there isn't one. */
+declare function getDoorRed(): Door | null;
 
 interface ExplosionOptions {
   /** World position, like [0, 2, -8]. Skip this to play in front of you. */
@@ -140,29 +199,10 @@ interface ExplosionOptions {
 /**
  * Play the ember explosion effect.
  * With no arguments, it plays in front of the camera.
- * Pass a player or object to play it at that actor.
+ * Pass a player or object to play it at that game object.
  */
 declare function playExplosion(options?: ExplosionOptions | GameObject | Player | [number, number, number]): void;
-/** Same as playExplosion — the VFX module's calling method. */
-declare function playEmberExplosion(options?: ExplosionOptions | GameObject | Player | [number, number, number]): void;
-
-interface TyphoonOptions {
-  /** World position, like [0, 0, -8]. Skip this to play on the ground in front of you. */
-  position?: [number, number, number] | number[] | Vec3;
-  /** How many seconds the tornado stays up. Default 8. */
-  duration?: number;
-  /** Shockwave base radius. Default 1. Max 10. */
-  radius?: number;
-}
-
-/**
- * Play the typhoon water-tornado effect.
- * With no arguments, it plays on the ground in front of the camera.
- * Pass a player or object to play it at that actor.
- */
-declare function playTyphoon(options?: TyphoonOptions | GameObject | Player | [number, number, number]): void;
-
-declare function print(text: string, options?: PrintOptions): void;
+declare function print(text: string | number, options?: PrintOptions): void;
 declare function setText(id: string, text: string, options?: PrintOptions): void;
 declare function clearText(): void;
 
@@ -175,6 +215,11 @@ declare function distance(a: GameObject | Vec3, b: GameObject | Vec3): number;
 declare function destroy(object: GameObject): void;
 declare function findObject(name: string): GameObject | null;
 declare function getPlayer(): Player;
+declare function getPlayerPosition(): [number, number, number];
+declare function setPlayerPosition(position: [number, number, number]): void;
+declare function getPlayerDirection(): [number, number, number];
+declare function getPlayerLookDirection(): [number, number, number];
+declare function setPlayerDirection(direction: [number, number, number]): void;
 
 declare function isKeyDown(key: string): boolean;
 declare function onKeyDown(key: string, callback: () => void): void;

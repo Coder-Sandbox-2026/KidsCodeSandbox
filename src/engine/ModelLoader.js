@@ -7,7 +7,9 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { basisTranscoderPath, cakeUrl, goldCoinUrl } from '../assets/assetSource.js';
+import {
+  basisTranscoderPath, cakeUrl, goldCoinUrl, goldStarUrl, redKeyUrl, platformerTextureUrl,
+} from '../assets/assetSource.js';
 import {
   stripAndBakeCollisionMeshes,
   visualBoundsInRootSpace,
@@ -15,6 +17,8 @@ import {
 
 export const GOLD_COIN_MODEL = 'goldCoin';
 export const CAKE_MODEL = 'cake';
+export const GOLD_STAR_MODEL = 'goldStar';
+export const RED_KEY_MODEL = 'redKey';
 
 const KTX2_ATTEMPTS = [
   { label: 'relative basis/', path: basisTranscoderPath() },
@@ -22,6 +26,20 @@ const KTX2_ATTEMPTS = [
 
 /** Collectible GLBs under src/assets/model/ */
 const COLLECTIBLE_DEFS = [
+  {
+    id: GOLD_STAR_MODEL,
+    url: goldStarUrl,
+    fileName: 'GoldStar.glb',
+    defaultName: GOLD_STAR_MODEL,
+    materialStyle: GOLD_STAR_MODEL,
+  },
+  {
+    id: RED_KEY_MODEL,
+    url: redKeyUrl,
+    fileName: 'keyRed.gltf',
+    defaultName: RED_KEY_MODEL,
+    materialStyle: RED_KEY_MODEL,
+  },
   {
     id: GOLD_COIN_MODEL,
     url: goldCoinUrl,
@@ -43,6 +61,12 @@ const COLLECTIBLE_DEFS = [
 export class ModelLoader {
   constructor() {
     this._gltf = new GLTFLoader();
+    this._gltf.manager.setURLModifier((url) => {
+      const normalized = decodeURIComponent(url).replaceAll('\\', '/');
+      return normalized.endsWith('/textures/platformer_texture3.ktx2')
+        ? platformerTextureUrl
+        : url;
+    });
     this._ktx2 = null;
     this._envMap = null;
     /** @type {Map<string, { template: THREE.Object3D, colliderParts: object[], materialStyle: string }>} */
@@ -75,6 +99,19 @@ export class ModelLoader {
     }
     if (errors.length) this.lastError = errors[0];
     this.ready = true;
+  }
+
+  /** Create a GLTFLoader using the KTX2 decoder initialized for this renderer. */
+  createGLTFLoader(manager) {
+    const loader = new GLTFLoader(manager);
+    if (this._ktx2) {
+      // KTX2Loader performs its own FileLoader requests through its manager.
+      // Keep it on the same manager as GLTFLoader so URL modifiers also apply
+      // to external KTX2 images referenced by the glTF.
+      if (manager) this._ktx2.manager = manager;
+      loader.setKTX2Loader(this._ktx2);
+    }
+    return loader;
   }
 
   async _createKtx2(renderer) {
@@ -130,6 +167,11 @@ export class ModelLoader {
     const copy = mat.clone();
     if (!copy.isMeshStandardMaterial && !copy.isMeshPhysicalMaterial) return copy;
 
+    if (style === GOLD_STAR_MODEL) {
+      copy.envMap = this._envMap;
+      copy.envMapIntensity = 0.02;
+      return copy;
+    }
     copy.emissiveIntensity = 0;
 
     if (style === 'gold') {
@@ -209,11 +251,9 @@ export class ModelLoader {
     }
 
     const root = entry.template.clone(true);
-    const receiveShadow = entry.materialStyle === 'gold';
     root.traverse((child) => {
       if (!child.isMesh) return;
-      child.castShadow = true;
-      child.receiveShadow = receiveShadow;
+      // GLTFLoader sanitizes spaces in .name; userData.name retains the authored name.
       if (!child.material) return;
       child.material = Array.isArray(child.material)
         ? child.material.map((mat) => this._prepareMaterial(mat, entry.materialStyle))

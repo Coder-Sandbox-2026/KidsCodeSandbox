@@ -5,11 +5,11 @@
 import './monacoEnv.js';
 import * as monaco from 'monaco-editor';
 import { typescript as monacoTypescript } from 'monaco-editor';
-import { registerAutocomplete } from './AutocompleteProvider.js';
+import { registerAutocomplete, bindOptionSuggestionScope } from './AutocompleteProvider.js';
 import { GAME_API_DTS } from './gameApiTypes.js';
 import { bindHoverDisclosureLayout } from './hoverLayout.js';
 
-registerAutocomplete(monaco);
+
 
 const typescript = monacoTypescript || monaco.languages?.typescript;
 const KID_CODE_URI = monaco.Uri.parse('file:///kids-code.js');
@@ -58,19 +58,12 @@ if (typescript?.javascriptDefaults) {
 }
 
 const DEFAULT_CODE = `// 🎮 Welcome to Kids Code 3D!
-// Write JavaScript below and press ▶ Run to see it in the 3D world!
-
-createCube({
-    position: [0, 3, -5],
-    color: "red",
-    physics: true
-});
-
-print("Hello! I made a red cube!");
+// Write your JavaScript code below, then press ▶ Run!
 `;
 
 export class EditorManager {
-  constructor(container) {
+  constructor(container, completionContext = {}) {
+    registerAutocomplete(monaco, completionContext);
     monaco.editor.defineTheme('kidsDark', {
       base: 'vs-dark',
       inherit: true,
@@ -111,6 +104,7 @@ export class EditorManager {
       wordWrap: 'on',
       fixedOverflowWidgets: true,
       suggestOnTriggerCharacters: true,
+      inlineSuggest: { showToolbar: 'never' },
       quickSuggestions: { other: 'on', comments: 'off', strings: 'on' },
       quickSuggestionsDelay: 0,
       wordBasedSuggestions: 'currentDocument',
@@ -136,6 +130,7 @@ export class EditorManager {
         localityBonus: true,
       },
     });
+    bindOptionSuggestionScope(this.editor);
     bindHoverDisclosureLayout(this.editor);
   }
 

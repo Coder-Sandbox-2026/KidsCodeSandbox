@@ -1,3 +1,4 @@
+import { resolveColor } from './resolveColor.js';
 /**
  * GameObject.js – Beginner-friendly wrapper around a Three.js object + Rapier body.
  *
@@ -10,6 +11,7 @@
  */
 import * as THREE from 'three';
 import { Actor } from '../engine/Actor.js';
+import { cleanupImportedShadows } from '../engine/importedShadows.js';
 
 function firstMesh(root) {
   if (root?.isMesh) return root;
@@ -46,7 +48,12 @@ export class GameObject extends Actor {
     this._name = mesh.name || '';
     this._onClick = null;
     this._ownsGeometry = opts.ownsGeometry !== false;
+    this._stageOwned = opts.stageOwned === true;
     this._colliderParts = opts.colliderParts || null;
+    this.ignorePlayer = opts.ignorePlayer === true;
+    this._validateScale = opts.validateScale || null;
+    this._onDestroy = opts.onDestroy || null;
+    this._light = opts.light || null;
     // Collision detection is its own switch — not tied to gravity.
     this._collisionEnabled = !!opts.collision;
 
@@ -102,9 +109,12 @@ export class GameObject extends Actor {
     return hex || '#ffffff';
   }
   set color(val) {
+    val = resolveColor(val);
     forEachMaterial(this.mesh, (mat) => {
       if (mat.color) mat.color.set(val);
+      if (this._light && mat.emissive) mat.emissive.set(val);
     });
+    if (this._light) this._light.color.set(val);
   }
   setColor(val) {
     this.color = val;
@@ -114,10 +124,31 @@ export class GameObject extends Actor {
   // --- Scale helpers ---
   setScale(x, y, z) {
     if (y === undefined) { y = x; z = x; }
+    this._setScaleComponents(x, y, z);
+    return this;
+  }
+
+  /** Internal shared path so public vector mutations obey light-shape limits too. */
+  _setScaleComponents(x, y, z) {
+    this._validateScale?.(x, y, z);
     this.mesh.scale.set(x, y, z);
     this._rebuildColliders();
     return this;
   }
+
+  get lightIntensity() { return this._light?.intensity ?? 0; }
+  set lightIntensity(value) {
+    if (!this._light) return;
+    this._light.intensity = this._light.userData.validateIntensity(value);
+  }
+  setLightIntensity(value) { this.lightIntensity = value; return this; }
+
+  get lightRadius() { return this._light?.distance ?? 0; }
+  set lightRadius(value) {
+    if (!this._light) return;
+    this._light.distance = this._light.userData.validateRadius(value);
+  }
+  setLightRadius(value) { this.lightRadius = value; return this; }
 
   // --- Rotation in degrees ---
   rotate(x, y, z) {
@@ -331,13 +362,13 @@ export class GameObject extends Actor {
       setups.push({ desc: this._colliderDescFromMesh(), sensor: false });
     }
     const visual = firstMesh(this.mesh);
-    const geoType = visual?.geometry?.type;
+    const isSphere = visual?.geometry?.type === 'SphereGeometry';
     const info = this.engine.physics.addDynamic(this.mesh, setups[0].desc, {
       mass: opts.mass,
       restitution: opts.restitution ?? opts.bounciness ?? 0.12,
       friction: opts.friction ?? 0.9,
-      linearDamping: opts.linearDamping ?? (geoType === 'SphereGeometry' ? 0.6 : 0.5),
-      angularDamping: opts.angularDamping ?? (geoType === 'SphereGeometry' ? 2.2 : 1.0),
+      linearDamping: opts.linearDamping ?? 0.05,
+      angularDamping: opts.angularDamping ?? (isSphere ? 0.5 : 0.05),
       extraColliders: setups.slice(1),
     });
     this._physicsInfo = info;
@@ -372,7 +403,33 @@ export class GameObject extends Actor {
     return this;
   }
 
+  /** Give this object one physical push, expressed as a scale-independent velocity change. */
+  move(direction, force) {
+    if (!Array.isArray(direction) || direction.length !== 3
+      || !direction.every(Number.isFinite)) {
+      throw new TypeError('move() direction must be [x, y, z] with three numbers.');
+    }
+    if (!Number.isFinite(force)) throw new TypeError('move() force must be a number.');
+    const [x, y, z] = direction;
+    const length = Math.hypot(x, y, z);
+    if (length === 0) throw new Error('move() direction must point somewhere.');
+    if (!this._physicsInfo) this.enablePhysics();
+    const mass = this._physicsInfo.body.mass();
+    const impulse = force * mass;
+    this._physicsInfo.body.applyImpulse({
+      x: x / length * impulse,
+      y: y / length * impulse,
+      z: z / length * impulse,
+    }, true);
+    return this;
+  }
+
   // --- Events ---
+  _triggerCollision(other) {
+    if (this.ignorePlayer && other?.isPlayer?.()) return;
+    super._triggerCollision(other);
+  }
+
   onClick(fn) {
     if (typeof fn !== 'function') {
       throw new TypeError('onClick() expects a function');
@@ -397,6 +454,9 @@ export class GameObject extends Actor {
   destroy() {
     if (this._destroyed) return;
     this._destroyed = true;
+    cleanupImportedShadows(this.mesh);
+    const onDestroy = this._onDestroy;
+    this._onDestroy = null;
     this._onClick = null;
     this._onCollision = null;
     if (this.mesh.userData) delete this.mesh.userData.gameObject;
@@ -415,5 +475,6 @@ export class GameObject extends Actor {
     });
     const idx = this.engine.userMeshes.indexOf(this.mesh);
     if (idx !== -1) this.engine.userMeshes.splice(idx, 1);
+    onDestroy?.();
   }
 }

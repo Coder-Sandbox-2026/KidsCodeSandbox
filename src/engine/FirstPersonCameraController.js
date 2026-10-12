@@ -13,11 +13,11 @@ export class FirstPersonCameraController {
     this.pitch = 0;
   }
 
-  /** Apply mouse look for this frame. */
+  /** Apply mouse look or keyboard turning for this frame. */
   applyLook(lookDelta) {
     if (!lookDelta) return;
-    this.yaw -= lookDelta.x * this.sensitivity;
-    this.pitch -= lookDelta.y * this.sensitivity;
+    this.yaw -= (lookDelta.turnRadians || 0) + lookDelta.x * this.sensitivity;
+    this.pitch -= (lookDelta.pitchRadians || 0) + lookDelta.y * this.sensitivity;
     this.pitch = Math.max(-Math.PI / 2 + 0.05, Math.min(Math.PI / 2 - 0.05, this.pitch));
   }
 

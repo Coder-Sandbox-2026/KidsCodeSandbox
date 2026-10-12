@@ -6,23 +6,133 @@ import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { appSettings } from '../settings/appSettings.js';
+import { GRAPHICS_PROFILES, getRenderPixelRatio } from '../settings/graphicsProfiles.js';
+
+const SHADOW_MAP_SIZE = {
+  medium: 1024,
+  high: 2048,
+};
+
+const BLOOM_RESOLUTION_SCALE = {
+  reduced: 0.5,
+  full: 1,
+};
+
+const SURFACE_DIAGNOSTIC_MODES = new Set([
+  'no-shadow-receive',
+  'no-normal-maps',
+  'no-textures',
+  'shadow-bias',
+  'shadow-normal-bias',
+  'shadow-tight-bounds',
+]);
+
+function getSurfaceDiagnosticMode(search = typeof window === 'undefined' ? '' : window.location.search) {
+  const requested = new URLSearchParams(search).get('surfaceDiag');
+  return SURFACE_DIAGNOSTIC_MODES.has(requested) ? requested : null;
+}
+
+// This is the final composer pass. Combine in linear space, then apply output
+// conversion once in bloom's existing final draw (no additional fullscreen pass).
+class OutputBloomPass extends UnrealBloomPass {
+  constructor(...args) {
+    super(...args);
+    this.resolutionScale = 1;
+    this.blendMaterial.uniforms.sceneTexture = { value: null };
+    this.blendMaterial.blending = THREE.NoBlending;
+    this.blendMaterial.transparent = false;
+    this.blendMaterial.fragmentShader = `
+      uniform sampler2D sceneTexture;
+      uniform sampler2D tDiffuse;
+      uniform float opacity;
+      varying vec2 vUv;
+      void main() {
+        vec4 sceneColor = texture2D(sceneTexture, vUv);
+        vec3 bloomColor = texture2D(tDiffuse, vUv).rgb;
+        gl_FragColor = vec4(sceneColor.rgb + opacity * bloomColor, sceneColor.a);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }
+    `;
+  }
+
+  setResolutionScale(scale) {
+    this.resolutionScale = scale;
+  }
+
+  setSize(width, height) {
+    super.setSize(
+      Math.max(1, Math.round(width * this.resolutionScale)),
+      Math.max(1, Math.round(height * this.resolutionScale)),
+    );
+  }
+
+  render(renderer, writeBuffer, readBuffer, deltaTime, maskActive) {
+    this.blendMaterial.uniforms.sceneTexture.value = readBuffer.texture;
+    super.render(renderer, writeBuffer, readBuffer, deltaTime, maskActive);
+  }
+}
 
 export class Renderer {
-  constructor(container) {
+  constructor(container, settings = appSettings) {
     this.container = container;
+    this.settings = settings;
+    this.shadowLight = null;
+    this._appliedShadowQuality = null;
+    this.bloomPass = null;
+    this.surfaceDiagnosticMode = getSurfaceDiagnosticMode();
+    this._surfaceDiagnosticSeen = new WeakSet();
 
     // WebGL renderer
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.toneMapping = THREE.NeutralToneMapping;
     this.renderer.toneMappingExposure = 1.0;
     container.appendChild(this.renderer.domElement);
+    this._applyShadowQuality();
 
     this.composer = null;
     this._resize();
     window.addEventListener('resize', () => this._resize());
+    this.settings.subscribe((_values, key) => {
+      if (key === 'graphicsProfile' || key === 'renderResolutionOverride') this._resize();
+      if (key === 'graphicsProfile') this._applyShadowQuality();
+    });
+  }
+
+  /** Register the scene's shadow-casting directional light. */
+  setShadowLight(light) {
+    if (this.shadowLight === light) return;
+    this.shadowLight = light;
+    this._appliedShadowQuality = null;
+    this._applyShadowQuality();
+  }
+
+  _applyShadowQuality() {
+    const profile = GRAPHICS_PROFILES[this.settings.get('graphicsProfile')]
+      || GRAPHICS_PROFILES.medium;
+    const quality = profile.shadowQuality;
+    if (quality === this._appliedShadowQuality) return;
+
+    const enabled = quality !== 'off';
+    this.renderer.shadowMap.enabled = enabled;
+
+    const shadow = this.shadowLight?.shadow;
+    const mapSize = SHADOW_MAP_SIZE[quality];
+    if (shadow && mapSize) {
+      if (shadow.mapSize.x !== mapSize || shadow.mapSize.y !== mapSize) {
+        shadow.mapSize.set(mapSize, mapSize);
+        shadow.map?.dispose();
+        shadow.map = null;
+      }
+      shadow.needsUpdate = true;
+      this.renderer.shadowMap.needsUpdate = true;
+    }
+
+    this._appliedShadowQuality = quality;
   }
 
   /** Set up post-processing for a given scene + camera */
@@ -31,16 +141,19 @@ export class Renderer {
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(scene, camera));
 
-    const bloom = new UnrealBloomPass(
+    const bloom = new OutputBloomPass(
       new THREE.Vector2(width, height),
       0.4,   // strength
       0.4,   // radius
       0.85   // threshold
     );
+    bloom.setResolutionScale(this._getBloomResolutionScale());
     this.composer.addPass(bloom);
+    this.bloomPass = bloom;
   }
 
   render(scene, camera) {
+    this._applySurfaceDiagnostic(scene);
     if (this.composer) {
       this.composer.render();
     } else {
@@ -48,10 +161,61 @@ export class Renderer {
     }
   }
 
+  /** Temporary global surface comparisons; use only with ?surfaceDiag=... . */
+  _applySurfaceDiagnostic(scene) {
+    if (!this.surfaceDiagnosticMode) return;
+
+    scene.traverse((object) => {
+      if (this._surfaceDiagnosticSeen.has(object)) return;
+      this._surfaceDiagnosticSeen.add(object);
+      if (!object.isMesh || !object.material) return;
+
+      if (this.surfaceDiagnosticMode === 'no-shadow-receive') {
+        object.receiveShadow = false;
+        return;
+      }
+
+      const materials = Array.isArray(object.material) ? object.material : [object.material];
+      for (const material of materials) {
+        if (!material) continue;
+        if (this.surfaceDiagnosticMode === 'no-normal-maps') {
+          if (!material.normalMap) continue;
+          material.normalMap = null;
+          material.needsUpdate = true;
+        } else if (this.surfaceDiagnosticMode === 'no-textures') {
+          let changed = false;
+          for (const key of ['map', 'normalMap', 'metalnessMap', 'roughnessMap', 'aoMap']) {
+            if (!material[key]) continue;
+            material[key] = null;
+            changed = true;
+          }
+          if (changed) material.needsUpdate = true;
+        }
+      }
+    });
+  }
+
   _resize() {
     const { width, height } = this._getSize();
+    const pixelRatio = getRenderPixelRatio(
+      height,
+      window.devicePixelRatio,
+      this.settings.get('graphicsProfile'),
+      this.settings.get('renderResolutionOverride'),
+    );
+    this.renderer.setPixelRatio(pixelRatio);
     this.renderer.setSize(width, height);
-    if (this.composer) this.composer.setSize(width, height);
+    if (this.composer) {
+      this.bloomPass?.setResolutionScale(this._getBloomResolutionScale());
+      this.composer.setPixelRatio(pixelRatio);
+      this.composer.setSize(width, height);
+    }
+  }
+
+  _getBloomResolutionScale() {
+    const profile = GRAPHICS_PROFILES[this.settings.get('graphicsProfile')]
+      || GRAPHICS_PROFILES.medium;
+    return BLOOM_RESOLUTION_SCALE[profile.bloomQuality] ?? BLOOM_RESOLUTION_SCALE.reduced;
   }
 
   _getSize() {

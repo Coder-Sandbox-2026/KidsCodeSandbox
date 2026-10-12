@@ -28,6 +28,8 @@
 <body>
   <!-- Top toolbar -->
   <div id="toolbar">
+    <span class="app-title">🎮 Kids Code 3D</span>
+
     <!-- Context group: mode, game type, level -->
     <div id="toolbar-context" class="toolbar-group toolbar-context">
       <span class="mode-label">MODE:</span>
@@ -52,6 +54,7 @@
         <button id="btn-level" class="tb-btn" title="Select a level">Level 1 ▾</button>
         <div id="level-menu" class="dropdown-menu hidden">
           <button data-level="1" class="active">📦 Level 1</button>
+          <button data-level="13">📦 Level 13</button>
         </div>
       </div>
 
@@ -61,6 +64,18 @@
           <button id="btn-challenge-level" class="tb-btn" title="Select a challenge level">Challenge Level 1 ▾</button>
           <div id="challenge-level-menu" class="dropdown-menu hidden">
             <button data-challenge-level="1" class="active">📦 Challenge Level 1</button>
+            <button data-challenge-level="2">📦 Challenge Level 2</button>
+            <button data-challenge-level="3">📦 Challenge Level 3</button>
+            <button data-challenge-level="4">📦 Challenge Level 4</button>
+            <button data-challenge-level="5">📦 Challenge Level 5</button>
+            <button data-challenge-level="6">📦 Challenge Level 6</button>
+            <button data-challenge-level="7">📦 Challenge Level 7</button>
+            <button data-challenge-level="8">📦 Challenge Level 8</button>
+            <button data-challenge-level="9">📦 Challenge Level 9</button>
+            <button data-challenge-level="10">📦 Challenge Level 10</button>
+            <button data-challenge-level="11">📦 Challenge Level 11</button>
+            <button data-challenge-level="12">🌊 Challenge Level 12</button>
+            <button data-challenge-level="13">📦 Challenge Level 13</button>
           </div>
         </div>
       </div>
@@ -73,14 +88,13 @@
       <button id="btn-reset" class="tb-btn reset" title="Reset everything">↻ Reset</button>
     </div>
 
-    <!-- Actions group: save, settings -->
-    <div id="toolbar-actions" class="toolbar-group toolbar-actions">
-      <button id="btn-save" class="tb-btn" title="Save code to browser">💾 Save</button>
-      <button id="btn-settings" class="tb-btn" title="Open settings" aria-haspopup="dialog" aria-controls="settings-dialog" aria-expanded="false">⚙ Settings</button>
-    </div>
-
-    <!-- App tools: console toggle, fullscreen -->
+    <!-- Right utilities: save, settings, console, fullscreen -->
     <div class="toolbar-right">
+      <div id="toolbar-actions" class="toolbar-group toolbar-actions">
+        <button id="btn-save" class="tb-btn" title="Save code to browser">💾 Save</button>
+        <button id="btn-settings" class="tb-btn" title="Open settings" aria-haspopup="dialog" aria-controls="settings-dialog" aria-expanded="false">⚙ Settings</button>
+      </div>
+
       <button id="btn-console" class="tb-btn small" title="Toggle console">🖥</button>
       <button id="btn-fs" class="tb-btn small" title="Fullscreen viewport">⛶</button>
     </div>

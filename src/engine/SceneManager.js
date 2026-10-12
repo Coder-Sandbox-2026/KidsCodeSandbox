@@ -4,13 +4,26 @@
  */
 import * as THREE from 'three';
 
+const SKY_HORIZON = 0x55b8f2;
+const SKY_TOP = 0x1684df;
+
+const ENVIRONMENTS = {
+  earlyDawn: { horizon: 0xffbc99, middle: 0x929ecb, top: 0x375b99, ambient: 0xc9d9ff, ambientIntensity: 0.3, skyLight: 0xd6e3ff, groundLight: 0x87947e, hemiIntensity: 0.9, sunColor: 0xffdbad, sunIntensity: 1.3, position: [-90, 20, -80] },
+  day: { horizon: SKY_HORIZON, top: SKY_TOP, ambient: 0xffffff, ambientIntensity: 0.2, skyLight: 0xe3f3ff, groundLight: 0x82966b, hemiIntensity: 0.65, sunColor: 0xfff3e2, sunIntensity: 1.5, position: [50, 80, 30] },
+  sunset: { horizon: 0xffc36b, top: 0xeb854e, ambient: 0xffead2, ambientIntensity: 0.3, skyLight: 0xffe3b0, groundLight: 0x89956b, hemiIntensity: 0.85, sunColor: 0xffce86, sunIntensity: 1.5, position: [-65, 35, 25] },
+  sunsetStrong: { horizon: 0xffb05d, top: 0xdf6a58, ambient: 0xffead2, ambientIntensity: 0.3, skyLight: 0xffd3a2, groundLight: 0x89956b, hemiIntensity: 0.85, sunColor: 0xffbd76, sunIntensity: 1.65, position: [-75, 28, 35] },
+  night: { horizon: 0x233c78, top: 0x0b1740, ambient: 0xb9cff8, ambientIntensity: 0.4, skyLight: 0xb7d6ff, groundLight: 0x59726f, hemiIntensity: 0.95, sunColor: 0xd8e9ff, sunIntensity: 1.25, position: [-40, 65, -30] },
+};
+
 export class SceneManager {
   constructor(renderer) {
     this.renderer = renderer;
 
     // Scene
     this.scene = new THREE.Scene();
-    this.scene.fog = new THREE.FogExp2(0x88bbee, 0.0025);
+    this.scene.background = new THREE.Color(SKY_HORIZON);
+    // Beyond even the diagonal of the playground: no haze over playable objects.
+    this.scene.fog = new THREE.Fog(SKY_HORIZON, 210, 500);
 
     // Camera
     this.camera = new THREE.PerspectiveCamera(75, renderer.aspect, 0.1, 2000);
@@ -21,6 +34,7 @@ export class SceneManager {
 
     // Sky
     this._createSky();
+    this.applyEnvironment('day');
 
     // Listen for resize
     window.addEventListener('resize', () => {
@@ -31,33 +45,65 @@ export class SceneManager {
 
   _setupLighting() {
     // Ambient
-    const ambient = new THREE.AmbientLight(0x9999cc, 0.6);
+    const ambient = new THREE.AmbientLight(0xffffff, 0.2);
+    this.ambient = ambient;
     this.scene.add(ambient);
 
     // Hemisphere
-    const hemi = new THREE.HemisphereLight(0x87ceeb, 0x556633, 0.5);
+    const hemi = new THREE.HemisphereLight(0xe3f3ff, 0x82966b, 0.65);
+    this.hemisphere = hemi;
     this.scene.add(hemi);
 
     // Sun (directional)
-    this.sun = new THREE.DirectionalLight(0xfff4e0, 1.8);
+    this.sun = new THREE.DirectionalLight(0xfff3e2, 1.5);
     this.sun.position.set(50, 80, 30);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048);
     this.sun.shadow.camera.near = 0.5;
     this.sun.shadow.camera.far = 200;
-    const d = 60;
+    const shadowDiagnostic = this.renderer?.surfaceDiagnosticMode;
+    const d = shadowDiagnostic === 'shadow-tight-bounds' ? 50 : 60;
     this.sun.shadow.camera.left = -d;
     this.sun.shadow.camera.right = d;
     this.sun.shadow.camera.top = d;
     this.sun.shadow.camera.bottom = -d;
+    // Three adds bias to the receiver depth comparison. Keep this positive and
+    // small: a negative value deepens self-shadowing on thin GLB surfaces and
+    // produces the acne/striping seen on the Level 13 door.
+    this.sun.shadow.bias = shadowDiagnostic === 'shadow-bias' ? 0.0005 : 0.0002;
+    this.sun.shadow.normalBias = shadowDiagnostic === 'shadow-normal-bias' ? 0.05 : 0.025;
     this.scene.add(this.sun);
+    this.renderer.setShadowLight?.(this.sun);
 
     // Small emissive sun sphere (for bloom glow)
     const sunGeo = new THREE.SphereGeometry(3, 16, 16);
     const sunMat = new THREE.MeshBasicMaterial({ color: 0xffffaa });
     const sunMesh = new THREE.Mesh(sunGeo, sunMat);
+    this.sunMesh = sunMesh;
     sunMesh.position.copy(this.sun.position);
     this.scene.add(sunMesh);
+  }
+
+  applyEnvironment(name = 'day') {
+    const preset = ENVIRONMENTS[name];
+    if (!preset) throw new Error(`Unknown environment: ${name}`);
+    this.environment = name;
+    this.scene.background.set(preset.horizon);
+    this.scene.fog.color.set(preset.horizon);
+    this.sky.material.uniforms.topColor.value.set(preset.top);
+    this.sky.material.uniforms.bottomColor.value.set(preset.horizon);
+    this.sky.material.uniforms.middleColor.value.set(preset.middle ?? preset.top);
+    this.sky.material.uniforms.dawn.value = name === 'earlyDawn' ? 1 : 0;
+    this.ambient.color.set(preset.ambient);
+    this.ambient.intensity = preset.ambientIntensity;
+    this.hemisphere.color.set(preset.skyLight);
+    this.hemisphere.groundColor.set(preset.groundLight);
+    this.hemisphere.intensity = preset.hemiIntensity;
+    this.sun.color.set(preset.sunColor);
+    this.sun.intensity = preset.sunIntensity;
+    this.sun.position.set(...preset.position);
+    this.sunMesh.visible = name === 'day';
+    this.sunMesh.position.copy(this.sun.position);
   }
 
   _createSky() {
@@ -67,8 +113,10 @@ export class SceneManager {
       side: THREE.BackSide,
       depthWrite: false,
       uniforms: {
-        topColor: { value: new THREE.Color(0x1a3a6a) },
-        bottomColor: { value: new THREE.Color(0x88ccee) },
+        topColor: { value: new THREE.Color(SKY_TOP) },
+        bottomColor: { value: new THREE.Color(SKY_HORIZON) },
+        middleColor: { value: new THREE.Color(SKY_TOP) },
+        dawn: { value: 0 },
       },
       vertexShader: `
         varying vec3 vWorldPos;
@@ -81,11 +129,20 @@ export class SceneManager {
       fragmentShader: `
         uniform vec3 topColor;
         uniform vec3 bottomColor;
+        uniform vec3 middleColor;
+        uniform float dawn;
         varying vec3 vWorldPos;
         void main() {
           float h = normalize(vWorldPos).y;
-          float t = clamp(h * 0.5 + 0.5, 0.0, 1.0);
-          gl_FragColor = vec4(mix(bottomColor, topColor, t), 1.0);
+          float t = smoothstep(0.0, 0.8, h);
+          vec3 color = mix(bottomColor, topColor, t);
+          if (dawn > 0.5) {
+            color = mix(bottomColor, middleColor, smoothstep(0.0, 0.25, h));
+            color = mix(color, topColor, smoothstep(0.25, 0.85, h));
+          }
+          gl_FragColor = vec4(color, 1.0);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
         }
       `,
     });

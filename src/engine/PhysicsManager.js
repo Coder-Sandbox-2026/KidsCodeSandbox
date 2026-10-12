@@ -2,10 +2,13 @@
  * PhysicsManager.js – Initializes Rapier physics world and synchronizes
  * physics bodies with Three.js meshes every frame.
  *
- * Two kinds of moving colliders:
+ * Three kinds of moving colliders:
  *   Dynamic   – gravity, bouncing, being pushed (enablePhysics).
  *   Kinematic – follows the mesh. Can be a sensor (detect only, like ITEM_)
- *               or solid (stops the player, like COL_).
+ *               or solid (stops the player).
+ *   Fixed     – scripted moving solids (MOVCOL_). These are manually moved
+ *               with setTranslation/setRotation so the character controller
+ *               treats them like the fixed walls used by authored COL_.
  */
 import RAPIER from '@dimforge/rapier3d-compat';
 
@@ -22,6 +25,8 @@ export class PhysicsManager {
     this._colliderToActor = new Map();
     /** @type {Map<number, {body: any, mesh: import('three').Object3D, collider: any, colliders: any[]}>} */
     this.kinematics = new Map();
+    /** @type {Map<number, {body: any, mesh: import('three').Object3D, collider: any, colliders: any[]}>} */
+    this.movingSolids = new Map();
     /** @type {Array<[number, number]>} collider-handle pairs that started contact this step */
     this._pendingCollisionStarts = [];
     this._eventQueue = null;
@@ -117,7 +122,8 @@ export class PhysicsManager {
 
   /**
    * Mesh-following body. Sensors detect touches without blocking.
-   * Solid kinematic colliders (COL_*) stop the player but ignore gravity.
+   * Solid kinematic colliders (for example authored COL_ children) stop the
+   * player but ignore gravity. Scripted MOVCOL_ solids use addFixedSolid().
    * @param {import('three').Object3D} mesh
    * @param {Array<{ desc: any, sensor?: boolean }>} setups
    */
@@ -146,6 +152,37 @@ export class PhysicsManager {
   }
 
   /**
+   * Add a persistent, non-sensor moving solid.
+   *
+   * Scripted MOVCOL_ solids deliberately use a fixed body. The current
+   * Rapier character-controller path slides against fixed bodies but can lose
+   * tangential movement against a kinematic solid when the player is also
+   * kinematic. This is for manually animated solids, not moving platforms.
+   */
+  addFixedSolid(mesh, colliderDesc, { friction = 0.9 } = {}) {
+    colliderDesc
+      .setSensor(false)
+      .setFriction(friction)
+      .setFrictionCombineRule(this.RAPIER.CoefficientCombineRule.Max);
+    const p = mesh.position;
+    const q = mesh.quaternion;
+    const bodyDesc = this.RAPIER.RigidBodyDesc.fixed()
+      .setTranslation(p.x, p.y, p.z)
+      .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w });
+    const body = this.world.createRigidBody(bodyDesc);
+    const collider = this._createColliderOnBody(body, colliderDesc, {
+      sensor: false,
+      friction,
+    });
+    this._colliderToMesh.set(collider.handle, mesh);
+
+    const id = this._nextId++;
+    const entry = { body, mesh, collider, colliders: [collider] };
+    this.movingSolids.set(id, entry);
+    return { id, body, collider, colliders: [collider] };
+  }
+
+  /**
    * Non-blocking sensor collider tied to a mesh. Used so onCollision works
    * without making the object a falling physics body.
    */
@@ -167,6 +204,18 @@ export class PhysicsManager {
 
   removeSensor(id) {
     this.removeKinematic(id);
+  }
+
+  removeFixedSolid(id) {
+    const entry = this.movingSolids.get(id);
+    if (!entry) return;
+    for (const col of entry.colliders || [entry.collider]) {
+      if (!col) continue;
+      this._colliderToMesh.delete(col.handle);
+      this._colliderToActor.delete(col.handle);
+    }
+    this.world.removeRigidBody(entry.body);
+    this.movingSolids.delete(id);
   }
 
   /** Sensor colliders (ITEM_* / enableCollision) for overlap checks. */
@@ -217,6 +266,45 @@ export class PhysicsManager {
     return pairs;
   }
 
+  /**
+   * Copy kinematic proxy transforms into Rapier before a character query.
+   * Position-based kinematics need their current collider pose updated before
+   * KinematicCharacterController.computeColliderMovement() runs.
+   */
+  syncKinematicTransforms(immediate = false) {
+    for (const { body, mesh } of this.kinematics.values()) {
+      this._syncKinematicEntry({ body, mesh }, immediate);
+    }
+  }
+
+  /** Sync one moving object's current pose before the next character query. */
+  syncKinematicTransform(id, immediate = true) {
+    const entry = this.kinematics.get(id);
+    if (entry) this._syncKinematicEntry(entry, immediate);
+  }
+
+  /** Update a scripted fixed solid before the next character query. */
+  syncFixedTransform(id) {
+    const entry = this.movingSolids.get(id);
+    if (!entry) return;
+    const p = entry.mesh.position;
+    const q = entry.mesh.quaternion;
+    entry.body.setTranslation({ x: p.x, y: p.y, z: p.z }, true);
+    entry.body.setRotation({ x: q.x, y: q.y, z: q.z, w: q.w }, true);
+  }
+
+  _syncKinematicEntry({ body, mesh }, immediate) {
+    const p = mesh.position;
+    const q = mesh.quaternion;
+    if (immediate) {
+      body.setTranslation({ x: p.x, y: p.y, z: p.z }, true);
+      body.setRotation({ x: q.x, y: q.y, z: q.z, w: q.w }, true);
+    } else {
+      body.setNextKinematicTranslation({ x: p.x, y: p.y, z: p.z });
+      body.setNextKinematicRotation({ x: q.x, y: q.y, z: q.z, w: q.w });
+    }
+  }
+
   /** Remove a dynamic body by its id */
   removeDynamic(id) {
     const entry = this.bodies.get(id);
@@ -234,13 +322,10 @@ export class PhysicsManager {
   step(dt) {
     if (!this.ready) return;
 
-    // Kinematic bodies (sensors + COL_* solids) follow their mesh
-    for (const { body, mesh } of this.kinematics.values()) {
-      const p = mesh.position;
-      const q = mesh.quaternion;
-      body.setNextKinematicTranslation({ x: p.x, y: p.y, z: p.z });
-      body.setNextKinematicRotation({ x: q.x, y: q.y, z: q.z, w: q.w });
-    }
+    // Kinematic bodies (sensors and generic mesh-following colliders) follow
+    // their mesh. Scripted MOVCOL_ solids are synchronized immediately by
+    // MovingObject before the player query and are not sent kinematic poses.
+    this.syncKinematicTransforms();
 
     this.world.timestep = Math.min(dt, 1 / 30);
     this.world.step(this._eventQueue);
@@ -267,6 +352,9 @@ export class PhysicsManager {
     for (const [id] of this.kinematics) {
       this.removeKinematic(id);
     }
+    for (const [id] of this.movingSolids) {
+      this.removeFixedSolid(id);
+    }
   }
 
   /** Full reset – rebuilds the world */
@@ -277,6 +365,7 @@ export class PhysicsManager {
     this.world = new this.RAPIER.World({ x: 0, y: -9.81, z: 0 });
     this.bodies.clear();
     this.kinematics.clear();
+    this.movingSolids.clear();
     this._colliderToMesh.clear();
     this._colliderToActor.clear();
     this._pendingCollisionStarts = [];

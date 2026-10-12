@@ -1,5 +1,5 @@
 /**
- * Player.js – First-class gameplay actor for the active player.
+ * Player.js – First-class gameplay object for the active player.
  *
  * Kids talk to this object. Movement and camera are swappable controllers.
  */
@@ -19,6 +19,13 @@ export const PLAYER_RADIUS = 0.35;
 export const CAPSULE_HALF_HEIGHT = PLAYER_HEIGHT / 2 - PLAYER_RADIUS;
 const SPAWN = { x: 0, y: PLAYER_HEIGHT / 2 + 0.5, z: 5 };
 const EYE_HEIGHT = CAPSULE_HALF_HEIGHT + PLAYER_RADIUS - 0.1;
+
+function validateVector(value, label) {
+  if (!Array.isArray(value) || value.length !== 3
+    || ![0, 1, 2].every(i => Number.isFinite(value[i]))) {
+    throw new Error(`${label} must be [x, y, z] with three numbers.`);
+  }
+}
 
 export class Player extends Actor {
   constructor(camera, physics) {
@@ -52,6 +59,7 @@ export class Player extends Actor {
     this.cameraController = new FirstPersonCameraController(camera, {
       eyeHeight: EYE_HEIGHT,
     });
+    this.movementController.onJump = () => this.engine?.audio?.playSfx('jump');
     this._overlapHandles = new Set();
   }
 
@@ -69,6 +77,44 @@ export class Player extends Actor {
     return !!this.movementController.grounded;
   }
 
+  getPlayerPosition() {
+    const { x, y, z } = this.body.translation();
+    return [x, y, z];
+  }
+
+  setPlayerPosition(value) {
+    validateVector(value, 'Player position');
+    const [x, y, z] = value;
+    const position = { x, y, z };
+    // Synchronize both the current body and its pending kinematic target.
+    this.body.setTranslation(position, true);
+    this.movementController.reset(position);
+    this._overlapHandles.clear();
+    this._position.set(x, y, z);
+    this.cameraController.applyToActor(position);
+  }
+
+  getPlayerDirection() {
+    const yaw = this.cameraController.yaw;
+    return [-Math.sin(yaw), 0, -Math.cos(yaw)];
+  }
+
+  getPlayerLookDirection() {
+    const direction = this.cameraController.camera.getWorldDirection(new THREE.Vector3());
+    return direction.normalize().toArray();
+  }
+
+  setPlayerDirection(value) {
+    validateVector(value, 'Player direction');
+    const [x, , z] = value;
+    if (x === 0 && z === 0) {
+      throw new Error('Player direction must point somewhere horizontally.');
+    }
+    this.cameraController.yaw = Math.atan2(-x, -z);
+    // The controller preserves pitch and applies its own camera relationship.
+    this.cameraController.applyToActor(this.position);
+  }
+
   setWalkSpeed(speed) {
     this._settings.walkSpeed = validatePlayerSetting('walkSpeed', speed);
     return this;
@@ -77,6 +123,7 @@ export class Player extends Actor {
 
   setJumpForce(force) {
     this._settings.jumpForce = validatePlayerSetting('jumpForce', force);
+    this._onJumpForceChanged?.(force);
     return this;
   }
   getJumpForce() { return this._settings.jumpForce; }
@@ -135,12 +182,16 @@ export class Player extends Actor {
   /** Engine pause / resume — also used when the viewport is not focused. */
   setEnabled(enabled) {
     this.input.setEnabled(enabled);
+    if (!enabled) this.movementController.clearSwimming(true);
   }
 
   update(dt) {
     if (!this.input.enabled) return;
-    this.cameraController.applyLook(this.input.consumeLookDelta());
-    const newPos = this.movementController.update(dt, this.input, this.cameraController.yaw);
+    this.cameraController.applyLook(this.input.consumeLookDelta(dt));
+    const newPos = this.movementController.update(dt, this.input, this.cameraController.yaw, {
+      waterVolumes: this.engine?.getWaterVolumes?.() ?? [],
+      eyeHeight: this.cameraController.eyeHeight,
+    });
     this.cameraController.applyToActor(newPos);
     this._position.set(newPos.x, newPos.y, newPos.z);
   }
@@ -194,13 +245,14 @@ export class Player extends Actor {
   resetPosition() {
     this.movementController.reset(SPAWN);
     this.cameraController.reset();
-    this.input.keys = Object.create(null);
+    this.input.clear();
     this._overlapHandles.clear();
     this._position.set(SPAWN.x, SPAWN.y, SPAWN.z);
     this.cameraController.applyToActor(SPAWN);
   }
 
   dispose() {
+    this.movementController.clearSwimming(true);
     this.input.dispose();
     if (this.collider) {
       this.physics.unregisterActorCollider(this.collider);

@@ -8,14 +8,29 @@ import { PhysicsManager } from './PhysicsManager.js';
 import { ModelLoader } from './ModelLoader.js';
 import { Player } from '../api/Player.js';
 import { DefaultLevel } from './DefaultLevel.js';
+import { CHALLENGE_LEVEL_CLASSES } from './challengeLevelRegistry.js';
+import { EnvironmentResources } from './EnvironmentResources.js';
 import { VFXManager } from './VFXManager.js';
 import { RunLifecycle } from './RunLifecycle.js';
+import { AudioManager } from '../audio/AudioManager.js';
+import { CHALLENGE_LEVEL_CONFIG } from '../challenges/challengeLevelConfig.js';
+import { prepareChallengeLevel13 } from './ChallengeLevel13.js';
+import { updateGoldStars, clearGoldStars } from '../api/GoldStar.js';
 import * as THREE from 'three';
+import { appSettings } from '../settings/appSettings.js';
+import { GRAPHICS_PROFILES } from '../settings/graphicsProfiles.js';
+import { createModelFactories } from '../api/ModelFactory.js';
+import { isAccessibleLevelId } from '../config/levelAccess.js';
 
 export class GameEngine {
-  constructor(container) {
+  constructor(container, { fpsDebug = false } = {}) {
     this.container = container;
+    this.fpsDebug = fpsDebug;
+    this.fpsDisplay = null;
+    this.fpsElapsed = 0;
+    this.fpsFrames = 0;
     this.runs = new RunLifecycle();
+    this.audio = new AudioManager();
 
     // Subsystems (initialized in init())
     this.renderer = null;
@@ -24,6 +39,8 @@ export class GameEngine {
     this.models = null;
     this.player = null;
     this.level = null;
+    this.levelId = 'default';
+    this.environmentResources = new EnvironmentResources();
     this.vfx = null;
 
     // State
@@ -40,6 +57,10 @@ export class GameEngine {
     this._raycaster = new THREE.Raycaster();
     this._pointer = new THREE.Vector2();
     this._onCanvasClick = (event) => this._handleClick(event);
+    appSettings.subscribe((_values, key) => {
+      if (key === 'graphicsProfile') this._applyWaterQuality();
+      if (key === 'showFps') this._setFpsDisplayVisible(appSettings.get('showFps') === 'on');
+    });
   }
 
   async init() {
@@ -55,6 +76,9 @@ export class GameEngine {
 
     // 3D models (gold coin, cake, …) — loaded from the local assets folder
     this.models = new ModelLoader();
+    // Internal collectible factories are available to authored stages before
+    // the student-facing GameAPI is constructed.
+    this.modelFactories = createModelFactories(this);
     this.modelLoadError = null;
     try {
       await this.models.init(this.renderer.renderer);
@@ -64,6 +88,9 @@ export class GameEngine {
       console.warn('[models] Could not load 3D models from src/assets:', err);
     }
 
+    // Authored stages are prepared once; selecting/resetting them remains synchronous.
+    await prepareChallengeLevel13({ modelLoader: this.models });
+
     // Player is a first-class actor (movement + camera are swappable controllers)
     this.player = new Player(this.sceneManager.camera, this.physics);
     this.player.engine = this;
@@ -72,7 +99,7 @@ export class GameEngine {
     this.renderer.setupPostProcessing(this.sceneManager.scene, this.sceneManager.camera);
 
     // Default level
-    this.level = new DefaultLevel(this.sceneManager.scene, this.physics);
+    this.level = new DefaultLevel(this.sceneManager.scene, this.physics, this.environmentResources);
 
     // Visual effects (ember explosion, typhoon, …)
     this.vfx = new VFXManager(this);
@@ -81,6 +108,7 @@ export class GameEngine {
     const ch = document.createElement('div');
     ch.id = 'crosshair';
     this.container.appendChild(ch);
+    this._createFpsDisplay();
 
     // Object clicks: browser click → raycaster → GameObject._triggerClick
     this.container.addEventListener('click', this._onCanvasClick);
@@ -147,6 +175,7 @@ export class GameEngine {
   }
 
   _notifyCollisionPair(a, b) {
+    if ((a?.ignorePlayer && b?.isPlayer?.()) || (b?.ignorePlayer && a?.isPlayer?.())) return;
     const otherA = b && !b._destroyed ? b : null;
     const otherB = a && !a._destroyed ? a : null;
     try { a?._triggerCollision(otherA); } catch { /* keep the loop going */ }
@@ -192,6 +221,11 @@ export class GameEngine {
     return this.player;
   }
 
+  /** Logical gameplay water volumes supplied by the active level. */
+  getWaterVolumes() {
+    return this.level?.waterVolumes ?? [];
+  }
+
   /** The single render/physics loop. Stops scheduling frames when paused. */
   _loop() {
     if (!this.running) {
@@ -202,7 +236,12 @@ export class GameEngine {
     this._animId = requestAnimationFrame(() => this._loop());
 
     const dt = Math.min(this.clock.getDelta(), 0.05);
+    this._updateFpsDisplay(dt);
 
+    // Moving level objects must publish their next pose before the player
+    // controller queries the world for this frame. Levels without moving
+    // objects do not implement this optional hook.
+    this.level?.updateBeforePhysics?.(dt);
     this.player.update(dt);
     this.physics.step(dt);
     this._dispatchCollisions();
@@ -212,8 +251,44 @@ export class GameEngine {
     }
 
     this.vfx?.update(dt);
+    this.level?.update?.(dt);
+    updateGoldStars(this, dt);
+    for (const coin of this.goldCoins ?? []) coin.updateCoin(dt);
+    for (const key of this.redKeys ?? []) key.updateRedKey(dt);
 
     this.renderer.render(this.sceneManager.scene, this.sceneManager.camera);
+  }
+
+  _createFpsDisplay() {
+    if (!this.fpsDebug) return;
+    const host = document.getElementById('viewport-pane');
+    if (!host) return;
+    const display = document.createElement('div');
+    display.dataset.gameFps = '';
+    display.textContent = 'FPS: --';
+    display.style.cssText = 'position:absolute;left:10px;top:10px;z-index:10000;padding:5px 8px;color:#dff;font:bold 13px/1 monospace;background:rgba(5,24,38,.78);border:1px solid rgba(130,225,255,.4);border-radius:4px;pointer-events:none;';
+    host.appendChild(display);
+    this.fpsDisplay = display;
+    this._setFpsDisplayVisible(appSettings.get('showFps') === 'on');
+  }
+
+  _setFpsDisplayVisible(visible) {
+    if (!this.fpsDisplay) return;
+    this.fpsDisplay.hidden = !visible;
+    if (!visible) {
+      this.fpsElapsed = 0;
+      this.fpsFrames = 0;
+    }
+  }
+
+  _updateFpsDisplay(dt) {
+    if (!this.fpsDisplay || this.fpsDisplay.hidden || !Number.isFinite(dt) || dt <= 0) return;
+    this.fpsElapsed += dt;
+    this.fpsFrames += 1;
+    if (this.fpsElapsed < 0.5) return;
+    this.fpsDisplay.textContent = `FPS: ${Math.round(this.fpsFrames / this.fpsElapsed)}`;
+    this.fpsElapsed = 0;
+    this.fpsFrames = 0;
   }
 
   /** Get the Three.js scene */
@@ -229,19 +304,52 @@ export class GameEngine {
     return run;
   }
 
-  /** Load the default playground level */
-  loadLevel() {
+  /** Load the selected environment, retaining shared resources across switches. */
+  loadLevel(levelId = this.levelId) {
+    const accessibleLevelId = this._validateLevelId(levelId);
+    if (accessibleLevelId !== this.levelId) {
+      this.reset(accessibleLevelId);
+      return;
+    }
     if (this.levelLoaded) return;
+    this._applyWaterQuality();
+    this.level.engine = this;
     this.level.build();
+    this.sceneManager.applyEnvironment?.(this.level.environment ?? 'day');
+    const config = CHALLENGE_LEVEL_CONFIG[this.levelId.replace('challenge-', '')];
+    const spawn = this.level.playerSpawn;
+    if (spawn || config) {
+      this.player.setPlayerPosition(spawn?.position ?? config.playerPosition);
+      this.player.setPlayerDirection(spawn?.direction ?? config.playerDirection);
+    }
     this.levelLoaded = true;
     this.vfx?.retainTyphoonTextures();
   }
 
-  /** Clear everything user-created but keep the level */
-  clearUserObjects() {
+  _applyWaterQuality() {
+    const profile = GRAPHICS_PROFILES[appSettings.get('graphicsProfile')]
+      || GRAPHICS_PROFILES.medium;
+    this.level?.setWaterQuality?.(profile.waterQuality);
+  }
+
+  _validateLevelId(levelId) {
+    if (levelId !== 'default' && !Object.hasOwn(CHALLENGE_LEVEL_CLASSES, levelId)) throw new Error(`Unknown level: ${levelId}`);
+    if (levelId !== 'default' && !isAccessibleLevelId(levelId)) return 'challenge-1';
+    return levelId;
+  }
+
+  /** Clear student-created objects while preserving stage-owned collectibles. */
+  clearUserObjects({ includeStageObjects = false } = {}) {
+    this.audio.stopSfx();
+    clearGoldStars(this);
     const roots = [...this.userMeshes];
+    const retained = [];
     for (const obj of roots) {
       const gameObject = obj.userData?.gameObject;
+      if (gameObject?._stageOwned && !includeStageObjects) {
+        retained.push(obj);
+        continue;
+      }
       if (gameObject && !gameObject._destroyed) {
         gameObject.destroy();
         continue;
@@ -256,19 +364,27 @@ export class GameEngine {
       }
       this.sceneManager.scene.remove(obj);
     }
-    this.userMeshes = [];
+    this.userMeshes = retained;
     this.userUpdateCallbacks = [];
     this.vfx?.clear();
   }
 
   /** Full reset – clears user objects, rebuilds level, resets player */
-  reset() {
+  reset(levelId = this.levelId) {
+    levelId = this._validateLevelId(levelId);
     this.runs.invalidate();
-    this.clearUserObjects();
+    this.clearUserObjects({ includeStageObjects: true });
     this.vfx?.releaseTyphoonTextures();
     this.level.clear();
-    this.physics.reset();
     this.player.dispose();
+    this.physics.reset();
+    if (levelId !== this.levelId) {
+      const Level = levelId === 'default' ? DefaultLevel : CHALLENGE_LEVEL_CLASSES[levelId];
+      this.level = new Level(this.scene, this.physics, this.environmentResources, {
+        sunWorldPosition: this.sceneManager.sunMesh?.position,
+      });
+      this.levelId = levelId;
+    }
     this.player = new Player(this.sceneManager.camera, this.physics);
     this.player.engine = this;
     this.levelLoaded = false;
@@ -279,11 +395,12 @@ export class GameEngine {
   /** Clear the entire scene (including level) */
   clearScene() {
     this.runs.invalidate();
-    this.clearUserObjects();
+    this.clearUserObjects({ includeStageObjects: true });
     this.vfx?.releaseTyphoonTextures();
     this.level.clear();
-    this.physics.reset();
+    this.sceneManager.applyEnvironment?.('day');
     this.player.dispose();
+    this.physics.reset();
     this.player = new Player(this.sceneManager.camera, this.physics);
     this.player.engine = this;
     this.levelLoaded = false;
@@ -292,6 +409,7 @@ export class GameEngine {
 
   /** Fully halt simulation, input, and rendering. Last frame stays on screen. */
   stop() {
+    this.audio.stopSfx();
     this.running = false;
     this.userUpdateCallbacks = [];
     this.player?.setEnabled(false);

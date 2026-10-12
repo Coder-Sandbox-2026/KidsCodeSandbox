@@ -1,3 +1,4 @@
+import { DEBUG_GOLD_STAR_ENABLED } from '../debug/debugGoldStarConfig.js';
 /**
  * GameAPI.js – Builds the global API object injected into the user's code scope.
  * All kid-friendly functions (createCube, print, etc.) live here.
@@ -7,8 +8,13 @@ import { createModelFactories } from './ModelFactory.js';
 import { GameObject } from './GameObject.js';
 import { HUD } from './HUD.js';
 import { Actor } from '../engine/Actor.js';
+import { studentCreationOptions, studentObject } from './studentTransforms.js';
 
 const MAX_FORMAT_DEPTH = 8;
+
+function normalizeKey(key) {
+  return typeof key === 'string' ? key.toLowerCase() : key;
+}
 
 function isPlainObject(value) {
   if (value === null || typeof value !== 'object') return false;
@@ -35,7 +41,7 @@ function formatValue(value, seen = new Set(), depth = 0, quoteStrings = false) {
   // Three.js scene-graph nodes (meshes, cameras, groups, …)
   if (value.isObject3D) return '[3D object]';
 
-  // Kid-facing actors: public fields only, never mesh/engine/physics
+  // Kid-facing game objects: public fields only, never mesh/engine/physics
   if (value instanceof Actor) {
     const summary = {};
     try { summary.name = value.name; } catch { /* ignore */ }
@@ -85,6 +91,22 @@ function formatArgs(args) {
   return Array.from(args, (arg) => formatValue(arg)).join(' ');
 }
 
+class DoorHandle {
+  constructor(engine, level, door) {
+    this._engine = engine;
+    this._level = level;
+    this._door = door;
+  }
+
+  lockDoor(locked) {
+    if (this._engine.level !== this._level || this._level?.door !== this._door) {
+      throw new Error('This door is no longer in the current level.');
+    }
+    this._door.lockDoor(locked);
+    return this;
+  }
+}
+
 export class GameAPI {
   constructor(engine, hudOverlay, consoleFn, clearConsoleFn) {
     this.engine = engine;
@@ -93,8 +115,10 @@ export class GameAPI {
     this._clearConsoleFn = clearConsoleFn || (() => {});
 
     this._objects = [];
+    this._expirations = new Map();
+    this._expirationTimer = null;
     this.shapes = createShapeFactories(engine);
-    this.models = createModelFactories(engine);
+    this.models = engine.modelFactories ?? createModelFactories(engine);
     this._keysDown = new Set();
     this._keyHandlers = [];
 
@@ -102,21 +126,27 @@ export class GameAPI {
     this._timers = new Map();
     this._counts = new Map();
 
+    document.addEventListener('pointerlockchange', () => this._keysDown.clear());
+    document.addEventListener('blur', () => this._keysDown.clear(), true);
     document.addEventListener('keydown', (e) => {
+      if (!engine.player?.input.active) return;
+      if (e.repeat && !this._keysDown.has(e.code)) return;
       this._keysDown.add(e.code);
       this._emitKey(e, 'down');
       if (!e.repeat) this._emitKey(e, 'pressed');
     });
     document.addEventListener('keyup', (e) => {
       this._keysDown.delete(e.code);
-      this._emitKey(e, 'released');
+      if (engine.player?.input.active) this._emitKey(e, 'released');
     });
   }
 
   _emitKey(event, type) {
+    const code = normalizeKey(event.code);
+    const key = normalizeKey(event.key);
     for (const handler of this._keyHandlers) {
       if ((handler.type || 'down') !== type) continue;
-      if (handler.key === event.code || handler.key === event.key) {
+      if (handler.key === code || handler.key === key) {
         handler.fn();
       }
     }
@@ -211,36 +241,69 @@ export class GameAPI {
   }
 
   /** Build the flat API dictionary injected as globals into user code */
-  buildScope(run) {
+  buildScope(run, { onPrint, onCall } = {}) {
     run.assertActive();
     const self = this;
     const engine = this.engine;
+    const report = (name, value) => { if (run.active) onCall?.(name, value); };
+    const consoleAPI = this._createConsole();
+    const log = consoleAPI.log;
+    const observedConsole = { ...consoleAPI, log: (...args) => {
+      log(...args);
+      report('console.log');
+    } };
+    if (engine.player) engine.player._onJumpForceChanged = run.callback(value => report('setJumpForce', value));
     const kidConsole = Object.freeze(Object.fromEntries(
-      Object.entries(this._createConsole()).map(([name, fn]) => [name, run.bind(fn)])
+      Object.entries(observedConsole).map(([name, fn]) => [name, run.bind(fn)])
     ));
 
-    const wrapCreate = (fn) => (opts) => {
-      const obj = fn(opts);
+    const wrapCreate = (fn, name) => (opts) => {
+      const obj = fn(studentCreationOptions(opts));
+      if (!obj) return null;
       self._objects.push(obj);
-      return obj;
+      self._expirations ??= new Map();
+      const destroy = obj.destroy;
+      obj.destroy = function (...args) {
+        try { return destroy.apply(this, args); }
+        finally {
+          const index = self._objects.indexOf(obj);
+          if (index >= 0) self._objects.splice(index, 1);
+          self._expirations.delete(obj);
+          if (!self._processingExpirations) self._scheduleExpiration();
+        }
+      };
+      const duration = Number(opts?.duration);
+      if (Number.isFinite(duration) && duration > 0) {
+        self._expirations.set(obj, performance.now() + duration * 1000);
+        self._scheduleExpiration();
+      }
+      if (name) report(name);
+      return studentObject(obj);
     };
 
     const scope = {
-      createCube: wrapCreate(this.shapes.createCube),
-      createSphere: wrapCreate(this.shapes.createSphere),
-      createCone: wrapCreate(this.shapes.createCone),
-      createCylinder: wrapCreate(this.shapes.createCylinder),
+      createCube: wrapCreate(this.shapes.createCube, 'createCube'),
+      createSphere: wrapCreate(this.shapes.createSphere, 'createSphere'),
+      createCone: wrapCreate(this.shapes.createCone, 'createCone'),
+      createCylinder: wrapCreate(this.shapes.createCylinder, 'createCylinder'),
+      createLightCube: wrapCreate(this.shapes.createLightCube, 'createLightCube'),
+      createLightSphere: wrapCreate(this.shapes.createLightSphere, 'createLightSphere'),
+      createLightCone: wrapCreate(this.shapes.createLightCone, 'createLightCone'),
+      createLightCylinder: wrapCreate(this.shapes.createLightCylinder, 'createLightCylinder'),
       createPlane: wrapCreate(this.shapes.createPlane),
       createGoldCoin: wrapCreate(this.models.createGoldCoin),
       createCake: wrapCreate(this.models.createCake),
+      ...(DEBUG_GOLD_STAR_ENABLED ? {
+        createGoldStar: wrapCreate(this.models.createGoldStar),
+      } : {}),
 
       playExplosion: (opts) => { engine.vfx?.playEmberExplosion(opts, run); },
-      playEmberExplosion: (opts) => { engine.vfx?.playEmberExplosion(opts, run); },
-      playTyphoon: (options) => { engine.vfx?.createTyphoon(options, run); },
 
       print: (text, opts) => {
         this.hud.print(text, opts);
         this._consoleFn(String(text), 'info');
+        if (run.active) onPrint?.(text);
+        report('print', text);
       },
       setText: (id, text, opts) => this.hud.setText(id, text, opts),
       clearText: () => this.hud.clear(),
@@ -259,18 +322,47 @@ export class GameAPI {
       },
 
       destroy: (obj) => { if (obj && obj.destroy) obj.destroy(); },
-      findObject: (name) => self._objects.find(o => o.name === name) || null,
-      getPlayer: () => engine.getPlayer(),
+      findObject: (name) => studentObject(self._objects.find(o => o.name === name) || null),
+      getKeyRed: () => {
+        const key = [...(engine.redKeys ?? [])]
+          .find(item => {
+            if (!item || item._destroyed || !item.mesh?.parent) return false;
+            for (let node = item.mesh; node; node = node.parent) {
+              if (!node.visible) return false;
+            }
+            return true;
+          });
+        console.info(`[RedKeyDebug] getKeyRed() -> ${key ? 'active key' : 'null'}.`);
+        if (key) report('getKeyRed');
+        return studentObject(key || null);
+      },
+      getDoorRed: () => {
+        const level = engine.level;
+        const door = level?.door && engine.levelId === 'challenge-13' ? level.door : null;
+        if (door) report('getDoorRed');
+        return door ? new DoorHandle(engine, level, door) : null;
+      },
+      getPlayer: () => {
+        const player = engine.getPlayer();
+        if (player) report('getPlayer');
+        return player;
+      },
+      getPlayerPosition: () => engine.getPlayer().getPlayerPosition(),
+      setPlayerPosition: (position) => engine.getPlayer().setPlayerPosition(position),
+      getPlayerDirection: () => engine.getPlayer().getPlayerDirection(),
+      getPlayerLookDirection: () => engine.getPlayer().getPlayerLookDirection(),
+      setPlayerDirection: (direction) => engine.getPlayer().setPlayerDirection(direction),
 
-      isKeyDown: (key) => self._keysDown.has(key),
+      isKeyDown: (key) => !!engine.player?.input.active
+        && Array.from(self._keysDown).some(pressed => normalizeKey(pressed) === normalizeKey(key)),
       onKeyDown: (key, fn) => {
-        self._keyHandlers.push({ key, fn, type: 'down' });
+        self._keyHandlers.push({ key: normalizeKey(key), fn, type: 'down' });
       },
       onKeyPressed: (key, fn) => {
-        self._keyHandlers.push({ key, fn, type: 'pressed' });
+        self._keyHandlers.push({ key: normalizeKey(key), fn, type: 'pressed' });
       },
       onKeyReleased: (key, fn) => {
-        self._keyHandlers.push({ key, fn, type: 'released' });
+        self._keyHandlers.push({ key: normalizeKey(key), fn, type: 'released' });
       },
 
       log: (...args) => kidConsole.log(...args),
@@ -283,11 +375,38 @@ export class GameAPI {
   }
 
   reset() {
+    if (this.engine.player) this.engine.player._onJumpForceChanged = null;
     this._objects = [];
+    this._expirations ??= new Map();
+    this._expirations.clear();
+    clearTimeout(this._expirationTimer);
+    this._expirationTimer = null;
     this._keyHandlers = [];
     this._groupDepth = 0;
     this._timers.clear();
     this._counts.clear();
     this.hud.clear();
+  }
+
+  _scheduleExpiration() {
+    clearTimeout(this._expirationTimer);
+    this._expirationTimer = null;
+    if (!this._expirations?.size) return;
+    const now = performance.now();
+    let next = Infinity;
+    for (const expiresAt of this._expirations.values()) next = Math.min(next, expiresAt);
+    this._expirationTimer = setTimeout(() => {
+      this._expirationTimer = null;
+      const current = performance.now();
+      this._processingExpirations = true;
+      try {
+        for (const [object, expiresAt] of [...this._expirations]) {
+          if (expiresAt <= current) object.destroy();
+        }
+      } finally {
+        this._processingExpirations = false;
+      }
+      this._scheduleExpiration();
+    }, Math.max(0, next - now));
   }
 }
