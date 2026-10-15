@@ -330,55 +330,136 @@ export class EnvironmentResources {
     return this.geometries.get(key);
   }
 
-  /** Closed snow cap: a checker-gradient top plus simple visible side faces. */
-  snowCheckerBox(x, z, w, d, h, tileSize = TILE_SIZE) {
-    const key = `snowCheckerBox:${x}:${z}:${w}:${d}:${h}:${tileSize}`;
-    if (!this.geometries.has(key)) {
-      const positions = [], colors = [];
-      const left = x - w / 2, right = x + w / 2, back = z - d / 2, front = z + d / 2;
-      const white = new THREE.Color(0xeaf5fa);
-      const cyan = new THREE.Color(0xc8e6f2);
-      const paleBlue = new THREE.Color(0xd8edf5);
-      const lavender = new THREE.Color(0xdee5f5);
-      const topY = h / 2;
+  /** Closed snow cap: checker-gradient top plus simple visible side faces. */
+snowCheckerBox(x, z, w, d, h, tileSize = TILE_SIZE) {
+  const key = `snowCheckerBox:${x}:${z}:${w}:${d}:${h}:${tileSize}`;
 
-      // Build the cap top directly in cap-local coordinates. Do not borrow the
-      // cached world-space floor geometry: each cap owns a closed,
-      // non-overlapping top/sides buffer with one consistent Y plane.
-      for (let ix = Math.floor(left / tileSize); ix < Math.ceil(right / tileSize); ix++) {
-        for (let iz = Math.floor(back / tileSize); iz < Math.ceil(front / tileSize); iz++) {
-          const x0 = Math.max(left, ix * tileSize), x1 = Math.min(right, (ix + 1) * tileSize);
-          const z0 = Math.max(back, iz * tileSize), z1 = Math.min(front, (iz + 1) * tileSize);
-          const alternate = (ix + iz) & 1;
-          const seed = (Math.abs(ix * 17 + iz * 31) % 7) / 6;
-          const center = (alternate ? cyan : white).clone().lerp(alternate ? lavender : paleBlue, seed * 0.16);
-          const edgeColor = (alternate ? white : paleBlue).clone().lerp(lavender, seed * 0.10);
-          const cx = (x0 + x1) / 2 - x, cz = (z0 + z1) / 2 - z;
-          const corners = [[x0 - x, z0 - z], [x0 - x, z1 - z], [x1 - x, z1 - z], [x1 - x, z0 - z]];
-          for (let i = 0; i < 4; i++) {
-            const next = (i + 1) % 4;
-            positions.push(cx, topY, cz, corners[i][0], topY, corners[i][1], corners[next][0], topY, corners[next][1]);
-            for (const color of [center, edgeColor, edgeColor]) colors.push(color.r, color.g, color.b);
-          }
-        }
+  if (!this.geometries.has(key)) {
+    const positions = [];
+    const colors = [];
+
+    const left = -w / 2;
+    const right = w / 2;
+    const back = -d / 2;
+    const front = d / 2;
+
+    const white = new THREE.Color(0xeaf5fa);
+    const cyan = new THREE.Color(0xc8e6f2);
+    const paleBlue = new THREE.Color(0xd8edf5);
+    const lavender = new THREE.Color(0xdee5f5);
+    const edge = new THREE.Color(0xd0e4ee);
+
+    const topY = h / 2;
+    const bottomY = -h / 2;
+
+    // Add one vertex and its color.
+    const addVertex = (px, py, pz, color) => {
+      positions.push(px, py, pz);
+      colors.push(color.r, color.g, color.b);
+    };
+
+    // Add a triangle with an explicit color for each vertex.
+    const addTriangle = (a, b, c, ca, cb, cc) => {
+      addVertex(a[0], a[1], a[2], ca);
+      addVertex(b[0], b[1], b[2], cb);
+      addVertex(c[0], c[1], c[2], cc);
+    };
+
+    // Checkerboard top. Coordinates are local to the cap.
+    for (
+      let ix = Math.floor(x / tileSize - w / (2 * tileSize));
+      ix < Math.ceil(x / tileSize + w / (2 * tileSize));
+      ix++
+    ) {
+      for (
+        let iz = Math.floor(z / tileSize - d / (2 * tileSize));
+        iz < Math.ceil(z / tileSize + d / (2 * tileSize));
+        iz++
+      ) {
+        const worldX0 = Math.max(x - w / 2, ix * tileSize);
+        const worldX1 = Math.min(x + w / 2, (ix + 1) * tileSize);
+        const worldZ0 = Math.max(z - d / 2, iz * tileSize);
+        const worldZ1 = Math.min(z + d / 2, (iz + 1) * tileSize);
+
+        if (worldX1 <= worldX0 || worldZ1 <= worldZ0) continue;
+
+        const x0 = worldX0 - x;
+        const x1 = worldX1 - x;
+        const z0 = worldZ0 - z;
+        const z1 = worldZ1 - z;
+
+        const alternate = (ix + iz) & 1;
+        const seed = (Math.abs(ix * 17 + iz * 31) % 7) / 6;
+
+        const center = (alternate ? cyan : white)
+          .clone()
+          .lerp(alternate ? lavender : paleBlue, seed * 0.16);
+
+        const edgeColor = (alternate ? white : paleBlue)
+          .clone()
+          .lerp(lavender, seed * 0.10);
+
+        const a = [x0, topY, z0];
+        const b = [x0, topY, z1];
+        const c = [x1, topY, z1];
+        const dPoint = [x1, topY, z0];
+
+        // Two upward-facing triangles, with consistent winding.
+        addTriangle(a, dPoint, b, center, edgeColor, edgeColor);
+        addTriangle(b, dPoint, c, edgeColor, edgeColor, center);
       }
-
-      const edge = new THREE.Color(0xd0e4ee);
-      const addQuad = (a, b, c, dPoint) => {
-        for (const point of [a, b, c, a, c, dPoint]) {
-          positions.push(...point);
-          colors.push(edge.r, edge.g, edge.b);
-        }
-      };
-      const y0 = -h / 2, y1 = h / 2;
-      addQuad([-w / 2, y0, d / 2], [w / 2, y0, d / 2], [w / 2, y1, d / 2], [-w / 2, y1, d / 2]);
-      addQuad([w / 2, y0, -d / 2], [-w / 2, y0, -d / 2], [-w / 2, y1, -d / 2], [w / 2, y1, -d / 2]);
-      addQuad([-w / 2, y0, -d / 2], [-w / 2, y0, d / 2], [-w / 2, y1, d / 2], [-w / 2, y1, -d / 2]);
-      addQuad([w / 2, y0, d / 2], [w / 2, y0, -d / 2], [w / 2, y1, -d / 2], [w / 2, y1, d / 2]);
-      this.geometries.set(key, coloredGeometry(positions, colors));
     }
-    return this.geometries.get(key);
+
+    // Add a visible side quad as two triangles.
+    const addQuad = (a, b, c, dPoint) => {
+      addTriangle(a, b, c, edge, edge, edge);
+      addTriangle(a, c, dPoint, edge, edge, edge);
+    };
+
+    // Front (+Z).
+    addQuad(
+      [-w / 2, bottomY, d / 2],
+      [ w / 2, bottomY, d / 2],
+      [ w / 2, topY, d / 2],
+      [-w / 2, topY, d / 2]
+    );
+
+    // Back (-Z).
+    addQuad(
+      [ w / 2, bottomY, -d / 2],
+      [-w / 2, bottomY, -d / 2],
+      [-w / 2, topY, -d / 2],
+      [ w / 2, topY, -d / 2]
+    );
+
+    // Left (-X).
+    addQuad(
+      [-w / 2, bottomY, -d / 2],
+      [-w / 2, bottomY, d / 2],
+      [-w / 2, topY, d / 2],
+      [-w / 2, topY, -d / 2]
+    );
+
+    // Right (+X).
+    addQuad(
+      [w / 2, bottomY, d / 2],
+      [w / 2, bottomY, -d / 2],
+      [w / 2, topY, -d / 2],
+      [w / 2, topY, d / 2]
+    );
+
+    const geometry = coloredGeometry(positions, colors);
+
+    // Ensure the geometry has valid normals and bounds.
+    geometry.computeVertexNormals();
+    geometry.computeBoundingBox();
+    geometry.computeBoundingSphere();
+
+    this.geometries.set(key, geometry);
   }
+
+  return this.geometries.get(key);
+}
 
   // Permanent engine teardown only; level.clear() must never dispose this cache.
   dispose() {
