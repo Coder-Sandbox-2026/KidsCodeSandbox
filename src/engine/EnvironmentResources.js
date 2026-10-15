@@ -352,20 +352,18 @@ snowCheckerBox(x, z, w, d, h, tileSize = TILE_SIZE) {
     const topY = h / 2;
     const bottomY = -h / 2;
 
-    // Add one vertex and its color.
     const addVertex = (px, py, pz, color) => {
       positions.push(px, py, pz);
       colors.push(color.r, color.g, color.b);
     };
 
-    // Add a triangle with an explicit color for each vertex.
     const addTriangle = (a, b, c, ca, cb, cc) => {
       addVertex(a[0], a[1], a[2], ca);
       addVertex(b[0], b[1], b[2], cb);
       addVertex(c[0], c[1], c[2], cc);
     };
 
-    // Checkerboard top. Coordinates are local to the cap.
+    // Checkerboard top in cap-local coordinates.
     for (
       let ix = Math.floor(x / tileSize - w / (2 * tileSize));
       ix < Math.ceil(x / tileSize + w / (2 * tileSize));
@@ -404,13 +402,13 @@ snowCheckerBox(x, z, w, d, h, tileSize = TILE_SIZE) {
         const c = [x1, topY, z1];
         const dPoint = [x1, topY, z0];
 
-        // Two upward-facing triangles, with consistent winding.
-        addTriangle(a, dPoint, b, center, edgeColor, edgeColor);
-        addTriangle(b, dPoint, c, edgeColor, edgeColor, center);
+        // Correct winding: both top triangles face +Y.
+        addTriangle(a, b, dPoint, center, edgeColor, edgeColor);
+        addTriangle(b, c, dPoint, edgeColor, center, edgeColor);
       }
     }
 
-    // Add a visible side quad as two triangles.
+    // Side faces.
     const addQuad = (a, b, c, dPoint) => {
       addTriangle(a, b, c, edge, edge, edge);
       addTriangle(a, c, dPoint, edge, edge, edge);
@@ -419,17 +417,17 @@ snowCheckerBox(x, z, w, d, h, tileSize = TILE_SIZE) {
     // Front (+Z).
     addQuad(
       [-w / 2, bottomY, d / 2],
-      [ w / 2, bottomY, d / 2],
-      [ w / 2, topY, d / 2],
+      [w / 2, bottomY, d / 2],
+      [w / 2, topY, d / 2],
       [-w / 2, topY, d / 2]
     );
 
     // Back (-Z).
     addQuad(
-      [ w / 2, bottomY, -d / 2],
+      [w / 2, bottomY, -d / 2],
       [-w / 2, bottomY, -d / 2],
       [-w / 2, topY, -d / 2],
-      [ w / 2, topY, -d / 2]
+      [w / 2, topY, -d / 2]
     );
 
     // Left (-X).
@@ -449,8 +447,6 @@ snowCheckerBox(x, z, w, d, h, tileSize = TILE_SIZE) {
     );
 
     const geometry = coloredGeometry(positions, colors);
-
-    // Ensure the geometry has valid normals and bounds.
     geometry.computeVertexNormals();
     geometry.computeBoundingBox();
     geometry.computeBoundingSphere();
