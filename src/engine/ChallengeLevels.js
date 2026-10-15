@@ -361,6 +361,589 @@ export class ChallengeLevel12 extends ChallengeEnvironment {
   }
 }
 
+/** Public Level 12: a lightweight, colorful snow playground. */
+export class SnowValleyLevel extends ChallengeLevel1 {
+  build() {
+    if (this.meshes.length) return;
+    const snowDiagnostic = typeof window === 'undefined'
+      ? null
+      : new URLSearchParams(window.location.search).get('snowDiag');
+    const snow = 0xeaf6ff;
+    const snowBlue = 0xc8e4f4;
+    const ice = 0x32c6d8;
+    const lavender = 0x7185d8;
+    const coral = 0xf27f91;
+    const edge = 70;
+
+    this._checkerBase(140, 1, 140, 0, -0.5, 0, snowBlue);
+    const ground = this._mesh(this.resources.snowChecker(0, 0, 140, 140),
+      this.resources.vertexMaterial('snowChecker'), 0, 0.002, 0);
+    ground.name = 'snowCheckerGround';
+    ground.castShadow = false;
+    this._box(140, 3, 1, 0, 1.5, -edge, lavender, false);
+    this._box(140, 3, 1, 0, 1.5, edge, lavender, false);
+    this._box(1, 3, 140, -edge, 1.5, 0, lavender, false);
+    this._box(1, 3, 140, edge, 1.5, 0, lavender, false);
+
+    // Broad, ordinary-collision steps lead from the meadow to the lookout.
+    for (let i = 0; i < 7; i++) {
+      const height = (i + 1) * 0.55;
+      this._box(8, height, 3.2, 18, height / 2, -8 - i * 3.2, ice);
+      const snowThickness = 0.16;
+      const cap = this._mesh(this.resources.box(8, snowThickness, 3.2, true), this.resources.material(snow),
+        18, height + snowThickness / 2, -8 - i * 3.2);
+      cap.name = 'snowStepCap';
+      this._applySnowSurface(cap, 18, -8 - i * 3.2, 8, 3.2, snowThickness, 1.6);
+      this._applySnowDiagnostic(cap, 'caps', snowDiagnostic, {
+        geometry: this.resources.box(8, snowThickness, 3.2, false),
+        material: this.resources.material(snow),
+      });
+      this._applySnowDiagnostic(cap, `cap-${i}`, snowDiagnostic);
+      this._applySnowDiagnostic(this.meshes[this.meshes.length - 2], 'steps', snowDiagnostic);
+    }
+
+    // Lookout: solid sides with a broad snow top.
+    const lookoutBodyHeight = 0.8;
+    const lookoutBodyY = 4.0;
+    const lookoutBodyTop = lookoutBodyY + lookoutBodyHeight / 2;
+    this._box(18, lookoutBodyHeight, 14, 18, lookoutBodyY, -31, lavender);
+    const lookoutSnowThickness = 0.16;
+    const lookoutSnowSink = 0.08;
+    const lookoutTop = this._mesh(this.resources.box(18, lookoutSnowThickness, 14, true), this.resources.material(snow),
+      18, lookoutBodyTop + lookoutSnowThickness / 2 - lookoutSnowSink, -31);
+    lookoutTop.name = 'snowLookoutTop';
+    this._applySnowSurface(lookoutTop, 18, -31, 18, 14, lookoutSnowThickness, 2.5);
+    this._applySnowDiagnostic(lookoutTop, 'lookout-surface', snowDiagnostic);
+    this._applySnowDiagnostic(this.meshes[this.meshes.length - 2], 'lookout-body', snowDiagnostic);
+    this._tree(25, -33, 0.9, lookoutBodyTop + lookoutSnowThickness);
+    this._rock(10, -27, 1.4, snowBlue);
+    this._rock(27, -25, 0.9, coral);
+
+    // A simple ice arch landmark in the opposite side of the valley.
+    this._box(2.8, 5.5, 2.8, -25, 2.75, 18, ice);
+    this._box(2.8, 5.5, 2.8, -15, 2.75, 18, ice);
+    this._box(12.8, 1.0, 2.8, -20, 6.25, 18, lavender);
+    this._box(3.2, 0.25, 3.2, -25, 5.625, 18, snow);
+    this._box(3.2, 0.25, 3.2, -15, 5.625, 18, snow);
+    for (const mesh of this.meshes) {
+      if (mesh.name === 'snowStepCap' || mesh.name === 'snowLookoutTop') continue;
+      if (mesh.position.x < -10 && mesh.position.x > -35 && mesh.position.z > 10 && mesh.position.z < 26) {
+        this._applySnowDiagnostic(mesh, 'ice-arch', snowDiagnostic);
+      }
+    }
+    for (const [x, z, size] of [[-32, 13, 1.1], [-10, 23, 0.8], [-31, 27, 0.9], [3, 8, 0.7]]) {
+      this._rock(x, z, size, snowBlue);
+    }
+
+    for (const [x, z, size] of [[-34, -28, 1], [-42, -8, 0.8], [-34, 36, 1.1], [5, 35, 0.9], [43, 25, 0.8]]) {
+      this._tree(x, z, size, 0);
+    }
+    this._snowDrifts([[-28, -12, 1.4], [-7, -22, 1.1], [35, 4, 1.25], [38, -12, 0.9], [-39, 7, 1.1]]);
+    this._buildClouds();
+  }
+
+  _rock(x, z, size, color) {
+    const rock = this._mesh(this.resources.scenery('rock'), this.resources.material(color), x, size * 0.55, z,
+      [size * 1.25, size * 0.8, size]);
+    rock.name = 'snowRock';
+    rock.rotation.y = x * 0.13;
+  }
+
+  _applySnowSurface(mesh, centerX, centerZ, width, depth, thickness, tileSize) {
+    mesh.geometry = this.resources.snowCheckerBox(centerX, centerZ, width, depth, thickness, tileSize);
+    mesh.material = this.resources.vertexMaterial('snowChecker');
+    // The underlying step/platform is the only collision and shadow caster.
+    // Keeping this thin visual cap out of the shadow map prevents coplanar
+    // cap/body depth from becoming a moving black shadow across the camera.
+    mesh.castShadow = false;
+    mesh.receiveShadow = false;
+  }
+
+  _applySnowDiagnostic(mesh, group, mode, alternatives = {}) {
+    if (!mode || !mesh) return;
+    const hide = mode === `hide-${group}`;
+    const noShadows = mode === `${group}-no-shadows`;
+    if (mode === 'caps-simple-material' && group === 'caps' && alternatives.material) {
+      mesh.material = alternatives.material;
+    }
+    if (mode === 'caps-simple-geometry' && group === 'caps' && alternatives.geometry) {
+      mesh.geometry = alternatives.geometry;
+      mesh.material = alternatives.material;
+    }
+    if (hide) mesh.visible = false;
+    if (noShadows) {
+      mesh.castShadow = false;
+      mesh.receiveShadow = false;
+    }
+  }
+
+  _snowDrifts(positions) {
+    this._terrainInstances('snowDrifts', this.resources.material(0xf8fdff),
+      positions.map(([x, z, size]) => [x, size * 0.28, z, size * 2.2, size * 0.55, size, x * 0.1]),
+      this.resources.scenery('cloud'));
+  }
+
+  _tree(x, z, size, groundY) {
+    const trunk = this._mesh(this.resources.scenery('trunk'), this.resources.material(0x8a5638), x,
+      groundY + 1.5 * size, z, [size, size, size]);
+    trunk.name = 'snowTreeTrunk';
+    const canopy = this._mesh(this.resources.scenery('canopy'), this.resources.material(0x168b83), x,
+      groundY + 4 * size, z, [2.3 * size, 2.6 * size, 2.1 * size]);
+    canopy.name = 'snowPine';
+    canopy.rotation.y = x * 0.13;
+    const body = this.physics.world.createRigidBody(this.physics.RAPIER.RigidBodyDesc.fixed()
+      .setTranslation(x, groundY + 1.5 * size, z));
+    this.physics.world.createCollider(this.physics.RAPIER.ColliderDesc.cylinder(1.5 * size, 0.4 * size)
+      .setFriction(0.9), body);
+    this.physicsBodies.push(body);
+  }
+}
+
+/** Public Level 13: a compact, beginner-friendly snowy maze. */
+export class SnowMazeLevel extends SnowValleyLevel {
+  build() {
+    if (this.meshes.length) return;
+    const snow = 0xeaf6ff;
+    const snowBlue = 0xc8e4f4;
+    const ice = 0x32c6d8;
+    const lavender = 0x7185d8;
+    const wallHeight = 4.5;
+    const wallThickness = 1;
+    const cellSize = 5;
+    const originX = -28;
+    const originZ = -14;
+    const rows = 5;
+    const columns = 5;
+
+    this._checkerBase(140, 1, 140, 0, -0.5, 0, snowBlue);
+    const ground = this._mesh(this.resources.snowChecker(0, 0, 140, 140),
+      this.resources.vertexMaterial('snowChecker'), 0, 0.002, 0);
+    ground.name = 'snowMazeCheckerGround';
+    ground.castShadow = false;
+
+    // Keep the surrounding meadow contained while leaving the maze itself open.
+    this._mazeWall(140, 1, 0, -70, wallHeight, lavender, snow, false);
+    this._mazeWall(140, 1, 0, 70, wallHeight, lavender, snow, false);
+    this._mazeWall(1, 140, -70, 0, wallHeight, lavender, snow, false);
+    this._mazeWall(1, 140, 70, 0, wallHeight, lavender, snow, false);
+
+    // A deliberate route from the south entrance to the north exit, with
+    // short branches that create readable dead ends for new players.
+    const route = [
+      [0, 4], [0, 3], [1, 3], [1, 2], [2, 2],
+      [2, 1], [3, 1], [3, 0], [4, 0],
+    ];
+    const branches = [
+      [[0, 3], [0, 2], [0, 1]],
+      [[1, 2], [1, 1]],
+      [[2, 2], [2, 3], [3, 3], [3, 4]],
+      [[2, 1], [2, 0]],
+      [[3, 1], [4, 1], [4, 2]],
+    ];
+    const openEdges = new Set();
+    const edgeKey = (a, b) => {
+      const first = `${a[0]},${a[1]}`;
+      const second = `${b[0]},${b[1]}`;
+      return first < second ? `${first}|${second}` : `${second}|${first}`;
+    };
+    const openPath = path => {
+      for (let i = 1; i < path.length; i++) openEdges.add(edgeKey(path[i - 1], path[i]));
+    };
+    openPath(route);
+    branches.forEach(openPath);
+
+    const vertical = new Map();
+    const horizontal = new Map();
+    const addSegment = (map, boundary, index) => {
+      if (!map.has(boundary)) map.set(boundary, []);
+      map.get(boundary).push(index);
+    };
+    const isOpen = (a, b) => openEdges.has(edgeKey(a, b));
+
+    for (let row = 0; row < rows; row++) {
+      for (let column = 0; column < columns; column++) {
+        const cell = [column, row];
+        if (column === 0) addSegment(vertical, 0, row);
+        if (column === columns - 1) addSegment(vertical, columns, row);
+        if (column < columns - 1 && !isOpen(cell, [column + 1, row])) {
+          addSegment(vertical, column + 1, row);
+        }
+        if (row === 0 && !(column === 4 && row === 0)) addSegment(horizontal, 0, column);
+        if (row === rows - 1 && !(column === 0 && row === rows - 1)) {
+          addSegment(horizontal, rows, column);
+        }
+        if (row < rows - 1 && !isOpen(cell, [column, row + 1])) {
+          addSegment(horizontal, row + 1, column);
+        }
+      }
+    }
+
+    for (const [boundary, indices] of vertical) {
+      this._addMazeRuns(indices, run => {
+        const x = originX + boundary * cellSize;
+        const z = originZ + (run.start + run.length / 2) * cellSize;
+        this._mazeWall(wallThickness, run.length * cellSize, x, z, wallHeight, lavender, snow);
+      });
+    }
+    for (const [boundary, indices] of horizontal) {
+      this._addMazeRuns(indices, run => {
+        const x = originX + (run.start + run.length / 2) * cellSize;
+        const z = originZ + boundary * cellSize;
+        this._mazeWall(run.length * cellSize, wallThickness, x, z, wallHeight, ice, snow);
+      });
+    }
+
+    const entranceZ = originZ + rows * cellSize;
+    const exitZ = originZ;
+    this._mazeMarker(originX, entranceZ, ice);
+    this._mazeMarker(originX + cellSize, entranceZ, ice);
+    this._mazeMarker(originX + 4 * cellSize, exitZ, lavender);
+    this._mazeMarker(originX + 5 * cellSize, exitZ, lavender);
+
+    // The surrounding meadow remains open so the player approaches the maze
+    // from outside and can leave again after reaching the exit.
+    for (const [x, z, size] of [[-43, -31, 1], [22, -28, 0.9], [-42, 22, 1.1], [30, 20, 0.8], [35, -5, 1]]) {
+      this._tree(x, z, size, 0);
+    }
+    for (const [x, z, size] of [[-38, -4, 1.2], [19, 3, 0.9], [-5, 27, 1.1], [38, 30, 0.8]]) {
+      this._rock(x, z, size, snowBlue);
+    }
+    this._snowDrifts([[-44, 8, 1.2], [18, -16, 1], [31, 5, 1.3], [-5, 31, 0.9]]);
+    this._buildClouds();
+  }
+
+  _addMazeRuns(indices, callback) {
+    const sorted = [...new Set(indices)].sort((a, b) => a - b);
+    if (!sorted.length) return;
+    let start = sorted[0];
+    let previous = start;
+    for (let i = 1; i <= sorted.length; i++) {
+      if (sorted[i] !== previous + 1) {
+        callback({ start, length: previous - start + 1 });
+        start = sorted[i];
+      }
+      previous = sorted[i];
+    }
+  }
+
+  _mazeWall(width, depth, x, z, height, color, snow, rounded = true) {
+    // Keep each wall's assigned hue while adding depth through vertex colors.
+    // The midpoint remains the original color so the existing wall grouping is
+    // still immediately recognizable in both maze levels.
+    const geometry = this.resources.box(width, height, depth, rounded).clone();
+    const base = new THREE.Color(color);
+    const hsl = {};
+    base.getHSL(hsl);
+    const bottom = new THREE.Color().setHSL(hsl.h, hsl.s, THREE.MathUtils.clamp(hsl.l - 0.2, 0, 1));
+    const top = new THREE.Color().setHSL(hsl.h, hsl.s, THREE.MathUtils.clamp(hsl.l + 0.2, 0, 1));
+    const positions = geometry.attributes.position;
+    const colors = [];
+    const smoothstep = value => value * value * (3 - 2 * value);
+    for (let i = 0; i < positions.count; i++) {
+      const heightT = THREE.MathUtils.clamp(positions.getY(i) / height + 0.5, 0, 1);
+      const colorAtHeight = heightT < 0.5
+        ? bottom.clone().lerp(base, smoothstep(heightT * 2))
+        : base.clone().lerp(top, smoothstep((heightT - 0.5) * 2));
+      // A restrained deterministic shift along the wall avoids a uniform,
+      // painted look without changing the wall's assigned color family.
+      const along = width >= depth ? positions.getX(i) / width + 0.5 : positions.getZ(i) / depth + 0.5;
+      const edgeShift = Math.sin(THREE.MathUtils.clamp(along, 0, 1) * Math.PI) * Math.abs(heightT - 0.5) * 0.08;
+      colorAtHeight.multiplyScalar(1 + edgeShift);
+      colors.push(colorAtHeight.r, colorAtHeight.g, colorAtHeight.b);
+    }
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    const wall = this._mesh(geometry, this.resources.vertexMaterial('mazeWall'), x, height / 2, z);
+    wall.name = 'snowMazeWall';
+    this.physicsBodies.push(this.physics.addStaticBox(width / 2, height / 2, depth / 2, x, height / 2, z));
+    const capHeight = 0.14;
+    const cap = this._mesh(this.resources.box(width, capHeight, depth, rounded), this.resources.material(snow),
+      x, height + capHeight / 2, z);
+    cap.name = 'snowMazeWallCap';
+    cap.castShadow = false;
+    cap.receiveShadow = false;
+  }
+
+  _mazeMarker(x, z, color) {
+    this._box(0.8, 4.8, 0.8, x, 2.4, z, color, true);
+  }
+}
+
+/** Public Level 14: a roof-covered, beginner-friendly frozen labyrinth. */
+export class FrozenLabyrinthLevel extends SnowMazeLevel {
+  build() {
+    if (this.meshes.length) return;
+    const snow = 0xeaf6ff;
+    const snowBlue = 0xc8e4f4;
+    const ice = 0x32c6d8;
+    const lavender = 0x7185d8;
+    const roofBlue = 0x4d6094;
+    const wallHeight = 4.8;
+    const wallThickness = 1;
+    const cellSize = 5;
+    const originX = -17.5;
+    const originZ = -17.5;
+    const rows = 7;
+    const columns = 7;
+
+    this._checkerBase(140, 1, 140, 0, -0.5, 0, snowBlue);
+    const ground = this._mesh(this.resources.snowChecker(0, 0, 140, 140),
+      this.resources.vertexMaterial('snowChecker'), 0, 0.002, 0);
+    ground.name = 'frozenLabyrinthCheckerGround';
+    ground.castShadow = false;
+
+    // The perimeter keeps the outdoor play area contained, including the corners.
+    this._mazeWall(140, 1, 0, -70, wallHeight, lavender, snow, false);
+    this._mazeWall(140, 1, 0, 70, wallHeight, lavender, snow, false);
+    this._mazeWall(1, 140, -70, 0, wallHeight, lavender, snow, false);
+    this._mazeWall(1, 140, 70, 0, wallHeight, lavender, snow, false);
+
+    // Main route: long straight sections connect the south entrance to the north exit.
+    const route = [
+      [0, 6], [0, 5], [0, 4], [1, 4], [2, 4], [3, 4],
+      [3, 3], [3, 2], [4, 2], [5, 2], [6, 2], [6, 1], [6, 0],
+    ];
+    // This branch rejoins the route to form an intentional western/central loop.
+    const branches = [
+      [[0, 4], [0, 3], [1, 3], [2, 3], [2, 2], [2, 1], [3, 1], [4, 1], [4, 2]],
+      [[1, 4], [1, 5], [2, 5], [2, 6]],
+      [[5, 2], [5, 3], [5, 4], [4, 4]],
+      [[6, 1], [5, 1]],
+    ];
+    const openEdges = new Set();
+    const edgeKey = (a, b) => {
+      const first = `${a[0]},${a[1]}`;
+      const second = `${b[0]},${b[1]}`;
+      return first < second ? `${first}|${second}` : `${second}|${first}`;
+    };
+    const openPath = path => {
+      for (let i = 1; i < path.length; i++) openEdges.add(edgeKey(path[i - 1], path[i]));
+    };
+    openPath(route);
+    branches.forEach(openPath);
+
+    const vertical = new Map();
+    const horizontal = new Map();
+    const addSegment = (map, boundary, index) => {
+      if (!map.has(boundary)) map.set(boundary, []);
+      map.get(boundary).push(index);
+    };
+    const isOpen = (a, b) => openEdges.has(edgeKey(a, b));
+    for (let row = 0; row < rows; row++) {
+      for (let column = 0; column < columns; column++) {
+        const cell = [column, row];
+        if (column === 0) addSegment(vertical, 0, row);
+        if (column === columns - 1) addSegment(vertical, columns, row);
+        if (column < columns - 1 && !isOpen(cell, [column + 1, row])) {
+          addSegment(vertical, column + 1, row);
+        }
+        if (row === 0 && !(column === columns - 1 && row === 0)) addSegment(horizontal, 0, column);
+        if (row === rows - 1 && !(column === 0 && row === rows - 1)) {
+          addSegment(horizontal, rows, column);
+        }
+        if (row < rows - 1 && !isOpen(cell, [column, row + 1])) {
+          addSegment(horizontal, row + 1, column);
+        }
+      }
+    }
+    for (const [boundary, indices] of vertical) {
+      this._addMazeRuns(indices, run => {
+        this._mazeWall(wallThickness, run.length * cellSize,
+          originX + boundary * cellSize,
+          originZ + (run.start + run.length / 2) * cellSize,
+          wallHeight, lavender, snow);
+      });
+    }
+    for (const [boundary, indices] of horizontal) {
+      this._addMazeRuns(indices, run => {
+        this._mazeWall(run.length * cellSize, wallThickness,
+          originX + (run.start + run.length / 2) * cellSize,
+          originZ + boundary * cellSize,
+          wallHeight, ice, snow);
+      });
+    }
+
+    // A single fixed roof slab encloses the maze without adding corridor obstacles.
+    const roof = this._box(38, 0.35, 38, 0, 5.0, 0, roofBlue, false);
+    roof.name = 'frozenLabyrinthRoof';
+    const snowRoof = this._mesh(this.resources.box(39, 0.14, 39, false), this.resources.material(snow), 0, 5.245, 0);
+    snowRoof.name = 'frozenLabyrinthSnowRoof';
+    snowRoof.castShadow = false;
+    snowRoof.receiveShadow = false;
+
+    const entranceZ = originZ + rows * cellSize;
+    const exitZ = originZ;
+    this._mazeMarker(originX, entranceZ, ice);
+    this._mazeMarker(originX + cellSize, entranceZ, ice);
+    this._mazeMarker(originX + 6 * cellSize, exitZ, lavender);
+    this._mazeMarker(originX + 7 * cellSize, exitZ, lavender);
+
+    // The surrounding snowfield stays open for exploration outside the fortress.
+    for (const [x, z, size] of [[-43, -31, 1], [28, -30, 0.9], [-43, 25, 1.1], [35, 24, 0.8], [42, -4, 1]]) {
+      this._tree(x, z, size, 0);
+    }
+    for (const [x, z, size] of [[-38, -5, 1.2], [30, 4, 0.9], [-6, 31, 1.1], [42, 34, 0.8]]) {
+      this._rock(x, z, size, snowBlue);
+    }
+    this._snowDrifts([[-44, 8, 1.2], [27, -16, 1], [39, 10, 1.3], [-7, 34, 0.9]]);
+    this._buildClouds();
+  }
+}
+
+/** Public Level 15: an open winter playground with elevated ice routes. */
+export class FrozenHighlandsLevel extends SnowValleyLevel {
+  build() {
+    if (this.meshes.length) return;
+    const snow = 0xeaf6ff;
+    const snowBlue = 0xc8e4f4;
+    const ice = 0x32c6d8;
+    const lavender = 0x7185d8;
+    const deepIce = 0x326aa8;
+
+    this._checkerBase(140, 1, 140, 0, -0.5, 0, snowBlue);
+    const ground = this._mesh(this.resources.snowChecker(0, 0, 140, 140),
+      this.resources.vertexMaterial('snowChecker'), 0, 0.002, 0);
+    ground.name = 'frozenHighlandsCheckerGround';
+    ground.castShadow = false;
+
+    // Keep the large outdoor play area contained without narrowing the routes.
+    this._box(140, 3, 1, 0, 1.5, -70, lavender, false);
+    this._box(140, 3, 1, 0, 1.5, 70, lavender, false);
+    this._box(1, 3, 140, -70, 1.5, 0, lavender, false);
+    this._box(1, 3, 140, 70, 1.5, 0, lavender, false);
+
+    // A connected vertical route: ground -> low -> medium -> high lookout.
+    this._highlandPlatform(0, 20, 12, 10, 2, ice);
+    this._highlandPlatform(0, -12, 8, 10, 6, deepIce);
+    this._highlandPlatform(24, -12, 8, 10, 6, lavender);
+    this._highlandRamp(0, 25, 14, 8, 0, 2, ice);
+    this._highlandRamp(0, 6, 9, 8, 2, 4, lavender);
+    this._highlandRamp(0, -7, 13, 8, 4, 6, deepIce);
+
+    // Three broad overpasses leave clear ground-level routes underneath.
+    this._highlandBridge(0, 4, 28, 4, 4, ice, 'mainIceOverpass');
+    this._highlandBridge(12, -12, 16, 4, 6, lavender, 'crossingIceOverpass');
+    this._highlandBridge(-22, -6, 4, 20, 4, deepIce, 'optionalIceOverpass');
+    this._highlandPlatform(-22, -20, 8, 8, 4, ice);
+    this._highlandRamp(-22, 4, 14, 6, 0, 4, ice);
+
+    // Cylindrical towers form a separate district around the connected routes.
+    for (const [x, z, radius, height, color] of [
+      [-34, 28, 3, 8, ice], [34, 25, 3.5, 11, lavender],
+      [32, -12, 3, 8, deepIce], [-34, -30, 2.7, 7, ice],
+    ]) this._highlandTower(x, z, radius, height, color);
+
+    // Large low-poly crystal formations provide silhouettes without blocking paths.
+    for (const [x, z, radius, height, color, rotation] of [
+      [-45, 3, 2.8, 8, ice, 0.2], [45, 2, 3.2, 10, lavender, -0.3],
+      [-43, -22, 2.4, 6, deepIce, 0.4], [43, -28, 2.8, 7, ice, -0.2],
+      [14, 27, 2.2, 5, lavender, 0.1],
+    ]) this._highlandCrystal(x, z, radius, height, color, rotation);
+
+    for (const [x, z, size] of [[-52, 24, 1], [52, 28, 0.9], [-52, -2, 1.1], [51, -4, 0.8], [8, 34, 0.9]]) {
+      this._tree(x, z, size, 0);
+    }
+    for (const [x, z, size] of [[-48, 15, 1.2], [48, 15, 0.9], [-47, -12, 1], [47, -20, 1.1], [10, -31, 0.8]]) {
+      this._rock(x, z, size, snowBlue);
+    }
+    this._snowDrifts([[-55, 35, 1.2], [55, 35, 1], [-55, -35, 1.1], [52, -35, 0.9], [15, 35, 0.8]]);
+    this._buildClouds();
+    // Highest accessible destination on the eastern high platform.
+  }
+
+  _highlandGradientGeometry(geometry, color) {
+    const result = geometry.clone();
+    const positions = result.attributes.position;
+    result.computeBoundingBox();
+    const minY = result.boundingBox.min.y;
+    const height = Math.max(result.boundingBox.max.y - minY, 0.001);
+    const base = new THREE.Color(color);
+    const hsl = {};
+    base.getHSL(hsl);
+    const bottom = new THREE.Color().setHSL(hsl.h, hsl.s, THREE.MathUtils.clamp(hsl.l - 0.18, 0, 1));
+    const top = new THREE.Color().setHSL(hsl.h, hsl.s, THREE.MathUtils.clamp(hsl.l + 0.18, 0, 1));
+    const colors = [];
+    for (let i = 0; i < positions.count; i++) {
+      const t = THREE.MathUtils.clamp((positions.getY(i) - minY) / height, 0, 1);
+      const value = bottom.clone().lerp(top, t * t * (3 - 2 * t));
+      colors.push(value.r, value.g, value.b);
+    }
+    result.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    return result;
+  }
+
+  _highlandFixed(mesh, collider) {
+    const RAPIER = this.physics.RAPIER;
+    const body = this.physics.world.createRigidBody(RAPIER.RigidBodyDesc.fixed()
+      .setTranslation(...mesh.position.toArray()).setRotation(mesh.quaternion));
+    this.physics.world.createCollider(collider.setFriction(0.9)
+      .setFrictionCombineRule(RAPIER.CoefficientCombineRule.Max), body);
+    this.physicsBodies.push(body);
+    return body;
+  }
+
+  _highlandMesh(geometry, color, x, y, z, scale, name) {
+    const mesh = this._mesh(this._highlandGradientGeometry(geometry, color),
+      this.resources.vertexMaterial('highlandIce'), x, y, z, scale);
+    mesh.name = name;
+    return mesh;
+  }
+
+  _highlandPlatform(x, z, width, depth, height, color) {
+    const body = this._highlandMesh(this.resources.box(width, 0.7, depth, false), color,
+      x, height - 0.35, z, [1, 1, 1], 'highlandPlatformBody');
+    this._highlandFixed(body, this.physics.RAPIER.ColliderDesc.cuboid(width / 2, 0.35, depth / 2));
+    const snow = this._mesh(this.resources.box(width - 0.12, 0.12, depth - 0.12, false),
+      this.resources.material(0xeaf6ff), x, height + 0.06, z);
+    snow.name = 'highlandPlatformSnow';
+    snow.castShadow = false;
+    snow.receiveShadow = false;
+  }
+
+  _highlandRamp(x, highZ, run, width, lowY, highY, color) {
+    const thickness = 0.28;
+    const rise = highY - lowY;
+    const angle = Math.atan2(rise, run);
+    const length = Math.hypot(run, rise);
+    const mesh = this._highlandMesh(this.resources.box(1, 1, 1, false), color,
+      x, lowY + rise / 2 - thickness * 0.5 * Math.cos(angle),
+      highZ + run / 2 - thickness * 0.5 * Math.sin(angle),
+      [width, thickness, length], 'highlandWalkableRamp');
+    mesh.rotation.x = angle;
+    this._highlandFixed(mesh, this.physics.RAPIER.ColliderDesc.cuboid(width / 2, thickness / 2, length / 2));
+  }
+
+  _highlandBridge(x, z, width, depth, height, color, name) {
+    const body = this._highlandMesh(this.resources.box(width, 0.7, depth, false), color,
+      x, height - 0.35, z, [1, 1, 1], name);
+    this._highlandFixed(body, this.physics.RAPIER.ColliderDesc.cuboid(width / 2, 0.35, depth / 2));
+    const snow = this._mesh(this.resources.box(width - 0.12, 0.12, depth - 0.12, false),
+      this.resources.material(0xeaf6ff), x, height + 0.06, z);
+    snow.name = `${name}Snow`;
+    snow.castShadow = false;
+    snow.receiveShadow = false;
+    for (const supportX of [x - width / 2 + 2, x + width / 2 - 2]) {
+      this._box(1.2, height - 0.35, depth - 0.4, supportX, (height - 0.35) / 2, z, color, true);
+    }
+  }
+
+  _highlandTower(x, z, radius, height, color) {
+    const geometry = new THREE.CylinderGeometry(radius, radius, height, 12, 3);
+    const tower = this._highlandMesh(geometry, color, x, height / 2, z, [1, 1, 1], 'highlandIceTower');
+    this._highlandFixed(tower, this.physics.RAPIER.ColliderDesc.cylinder(height / 2, radius));
+    const cap = this._mesh(new THREE.CylinderGeometry(radius + 0.12, radius + 0.12, 0.16, 12),
+      this.resources.material(0xeaf6ff), x, height + 0.08, z);
+    cap.name = 'highlandTowerSnowCap';
+    cap.castShadow = false;
+    cap.receiveShadow = false;
+  }
+
+  _highlandCrystal(x, z, radius, height, color, rotation) {
+    const crystal = this._highlandMesh(new THREE.ConeGeometry(radius, height, 6, 2),
+      color, x, height / 2, z, [1, 1, 1], 'highlandIceCrystal');
+    crystal.rotation.y = rotation;
+  }
+}
+
 export class ChallengeLevel2 extends ChallengeEnvironment {
   build() {
     if (!this._begin()) return;

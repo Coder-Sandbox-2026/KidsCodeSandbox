@@ -226,7 +226,7 @@ const challengeResetBtn = document.getElementById('btn-challenge-reset');
   // Clicking the play overlay OR the game container requests pointer lock
   const requestLock = () => {
     gameContainer.focus({ preventScroll: true });
-    engine.audio.playMusic();
+    engine.audio.playMusicForLevel(engine.levelId);
     engine.resume();
     updateMusicVolume();
     if (mobileControls?.supported) {
@@ -261,10 +261,10 @@ const challengeResetBtn = document.getElementById('btn-challenge-reset');
   let challengeStar = null;
   const selectedLevelId = () => selectedStage(AppState).levelId;
   async function runCode() {
-    engine.audio.playMusic();
     successUI?.cancel();
     // Select the environment before creating a run: switching invalidates runs.
     engine.loadLevel(selectedLevelId());
+    engine.audio.playMusicForLevel(engine.levelId);
     // Clean up previous run
     const run = engine.beginStudentRun();
     challengeStar = null;
@@ -364,9 +364,9 @@ const challengeResetBtn = document.getElementById('btn-challenge-reset');
   };
 
   function runAction() {
-    engine.audio.playMusic();
     successUI.cancel();
     engine.loadLevel(selectedLevelId());
+    engine.audio.playMusicForLevel(engine.levelId);
     if (AppState.mode === 'challenge') {
       stopGame();
       challengeUI.show();

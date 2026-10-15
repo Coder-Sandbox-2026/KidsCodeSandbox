@@ -4,6 +4,7 @@ import { MovingObject } from './MovingObject.js';
 export class Door extends MovingObject {
   constructor(options = {}) {
     super(options);
+    this.keyColor = options.keyColor;
     this._locked = options.locked === true;
   }
 

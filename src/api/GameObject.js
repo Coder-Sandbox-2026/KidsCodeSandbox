@@ -49,6 +49,7 @@ export class GameObject extends Actor {
     this._onClick = null;
     this._ownsGeometry = opts.ownsGeometry !== false;
     this._stageOwned = opts.stageOwned === true;
+    this._keyColor = opts.keyColor;
     this._colliderParts = opts.colliderParts || null;
     this.ignorePlayer = opts.ignorePlayer === true;
     this._validateScale = opts.validateScale || null;

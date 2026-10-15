@@ -8,7 +8,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import {
-  basisTranscoderPath, cakeUrl, goldCoinUrl, goldStarUrl, redKeyUrl, platformerTextureUrl,
+  basisTranscoderPath, cakeUrl, goldCoinUrl, goldStarUrl, redKeyUrl, greenKeyUrl, yellowKeyUrl, blueKeyUrl, platformerTextureUrl,
 } from '../assets/assetSource.js';
 import {
   stripAndBakeCollisionMeshes,
@@ -19,6 +19,9 @@ export const GOLD_COIN_MODEL = 'goldCoin';
 export const CAKE_MODEL = 'cake';
 export const GOLD_STAR_MODEL = 'goldStar';
 export const RED_KEY_MODEL = 'redKey';
+export const GREEN_KEY_MODEL = 'greenKey';
+export const YELLOW_KEY_MODEL = 'yellowKey';
+export const BLUE_KEY_MODEL = 'blueKey';
 
 const KTX2_ATTEMPTS = [
   { label: 'relative basis/', path: basisTranscoderPath() },
@@ -41,6 +44,9 @@ const COLLECTIBLE_DEFS = [
     defaultName: RED_KEY_MODEL,
     materialStyle: RED_KEY_MODEL,
   },
+  { id: GREEN_KEY_MODEL, url: greenKeyUrl, fileName: 'keyGreen.gltf', defaultName: GREEN_KEY_MODEL, materialStyle: RED_KEY_MODEL },
+  { id: YELLOW_KEY_MODEL, url: yellowKeyUrl, fileName: 'keyYellow.gltf', defaultName: YELLOW_KEY_MODEL, materialStyle: RED_KEY_MODEL },
+  { id: BLUE_KEY_MODEL, url: blueKeyUrl, fileName: 'keyBlue.gltf', defaultName: BLUE_KEY_MODEL, materialStyle: RED_KEY_MODEL },
   {
     id: GOLD_COIN_MODEL,
     url: goldCoinUrl,

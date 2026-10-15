@@ -6,6 +6,7 @@ import {
 } from './ChallengeLevel13.js';
 import { isRedKeyPlaceholder, spawnRedKeyPlaceholders } from './GLBStageProcessor.js';
 import { stripAndBakeCollisionMeshes } from './collisionMeshes.js';
+import { RedKey } from '../api/RedKey.js';
 
 test('PLAYER_START classification is exact and supports authored glTF names', () => {
   assert.equal(isPlayerStartNode({ name: 'PLAYER_START' }), true);
@@ -55,4 +56,18 @@ test('Red Key placeholder replacement does not skip adjacent COL_ geometry', () 
   assert.equal(parts.filter(part => part.role === 'col').length, 1);
   assert.equal(root.getObjectByName('PH_KeyRed'), undefined);
   assert.equal(root.getObjectByName('COL_Floor'), undefined);
+});
+
+test('colored keys register independently and expose collision callbacks', () => {
+  const engine = { userMeshes: [], getPlayer: () => null };
+  for (const color of ['red', 'green', 'yellow', 'blue']) {
+    const mesh = new THREE.Group();
+    mesh.name = `key${color}`;
+    const key = new RedKey(mesh, engine, null, { collision: false, keyColor: color });
+    assert.equal(engine.keys.get(color).has(key), true);
+    assert.equal(typeof key.onCollision, 'function');
+    assert.equal(key.keyColor, color);
+  }
+  assert.equal(engine.keys.size, 4);
+  assert.equal(engine.redKeys.size, 1);
 });

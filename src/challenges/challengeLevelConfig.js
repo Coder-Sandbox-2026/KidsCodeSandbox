@@ -11,9 +11,10 @@ export const CHALLENGE_LEVEL_CONFIG = Object.freeze(Object.fromEntries([
   [[33.609, 7.950, -33.082], [-0.780, 0, 0.626], [-27.5, 2, -26.5], 0.2],
   [[44.661, 22.250, -15.425], [0.078, 0, 0.997], [-28, 12, -31.1], 1.0],
   [[24.627, 0.950, 40.763], [0.042, 0, -0.999], [23.5, 28, 42.3], 0.9],
-  [[0, 0.950, 12], [0, 0, -1], [0, 2, -22], 0.25],
-  // Placeholder reward only; the authored stage supplies Level 13's player spawn.
-  [[-22.520, 2.700, -18.584], [-0.589, 0, 0.808], [23.7, 6, -20.4], 0.2],
+  [[0, 0.950, 38], [0, 0, -1], [17.8, 2.0, -32.1], 0.25],
+  [[-15, 0.950, 25], [0, 0, -1], [-5.9, 2.0, -1.7], 0.25],
+  [[0, 0.950, 28], [0, 0, -1], [5.7, 2, 5.3], 0.25],
+  [[0, 0.950, 42], [0, 0, -1], [-24.0, 2.0, -9.4], 0.25],
 ].map(([position, direction, goldStarPosition, scale], index) => [index + 1, Object.freeze({
   playerPosition: Object.freeze(position), playerDirection: Object.freeze(direction),
   goldStar: Object.freeze({ position: Object.freeze(goldStarPosition), scale }),

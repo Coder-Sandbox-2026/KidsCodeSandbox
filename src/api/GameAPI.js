@@ -99,7 +99,8 @@ class DoorHandle {
   }
 
   lockDoor(locked) {
-    if (this._engine.level !== this._level || this._level?.door !== this._door) {
+    const currentDoor = this._level?.doors?.get(this._door.keyColor) ?? this._level?.door;
+    if (this._engine.level !== this._level || currentDoor !== this._door) {
       throw new Error('This door is no longer in the current level.');
     }
     this._door.lockDoor(locked);
@@ -324,7 +325,7 @@ export class GameAPI {
       destroy: (obj) => { if (obj && obj.destroy) obj.destroy(); },
       findObject: (name) => studentObject(self._objects.find(o => o.name === name) || null),
       getKeyRed: () => {
-        const key = [...(engine.redKeys ?? [])]
+        const key = [...(engine.keys?.get('red') ?? engine.redKeys ?? [])]
           .find(item => {
             if (!item || item._destroyed || !item.mesh?.parent) return false;
             for (let node = item.mesh; node; node = node.parent) {
@@ -337,11 +338,14 @@ export class GameAPI {
         return studentObject(key || null);
       },
       getDoorRed: () => {
-        const level = engine.level;
-        const door = level?.door && engine.levelId === 'challenge-13' ? level.door : null;
-        if (door) report('getDoorRed');
-        return door ? new DoorHandle(engine, level, door) : null;
+        return getDoor('red');
       },
+      getDoorGreen: () => getDoor('green'),
+      getDoorYellow: () => getDoor('yellow'),
+      getDoorBlue: () => getDoor('blue'),
+      getKeyGreen: () => getKey('green'),
+      getKeyYellow: () => getKey('yellow'),
+      getKeyBlue: () => getKey('blue'),
       getPlayer: () => {
         const player = engine.getPlayer();
         if (player) report('getPlayer');
@@ -369,6 +373,18 @@ export class GameAPI {
       Math,
       console: kidConsole,
     };
+    function getDoor(color) {
+      const level = engine.level;
+      const door = level?.doors?.get(color) && engine.levelId === 'challenge-13' ? level.doors.get(color) : null;
+      if (door) report(`getDoor${color[0].toUpperCase()}${color.slice(1)}`);
+      if (door) door.keyColor = color;
+      return door ? new DoorHandle(engine, level, door) : null;
+    }
+    function getKey(color) {
+      const key = [...(engine.keys?.get(color) ?? [])].find(item => !item?._destroyed && item.mesh?.parent);
+      if (key) report(`getKey${color[0].toUpperCase()}${color.slice(1)}`);
+      return studentObject(key || null);
+    }
     return Object.fromEntries(Object.entries(scope).map(([name, value]) => [
       name, typeof value === 'function' ? run.bind(value) : value,
     ]));

@@ -1,5 +1,5 @@
 /** Maximum level number currently exposed to players. */
-export const MAX_ACCESSIBLE_LEVEL = 11;
+export const MAX_ACCESSIBLE_LEVEL = 15;
 
 export function isAccessibleLevel(level) {
   return Number.isInteger(level) && level >= 1 && level <= MAX_ACCESSIBLE_LEVEL;

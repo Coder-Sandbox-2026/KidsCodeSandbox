@@ -103,11 +103,21 @@ export const PLAYER_SETTING_OPTIONS = [
 
 /** Global API completions */
 export const API_DOCS = [
+  ...['Green', 'Yellow', 'Blue'].map(color => ({
+    label: `getDoor${color}`, kind: 'Function', detail: `Get the ${color.toLowerCase()} door, if there is one`,
+    doc: `getDoor${color}()\n\nGets the ${color.toLowerCase()} door in this level, or null if there isn't one.`,
+    completion: call(`getDoor${color}`, `getDoor${color}()`),
+  })),
   {
     label: 'getDoorRed', kind: 'Function', detail: 'Get the red door, if there is one',
     doc: "getDoorRed()\n\nGets the red door in this level, or null if there isn't one.",
     completion: call('getDoorRed', 'getDoorRed()'),
   },
+  ...['Green', 'Yellow', 'Blue'].map(color => ({
+    label: `getKey${color}`, kind: 'Function', detail: `Get the ${color.toLowerCase()} key, if there is one`,
+    doc: `getKey${color}()\n\nGets the ${color.toLowerCase()} key in this level, or null if there isn't one.\nUse key.onCollision(callback) to run code when the player touches it.`,
+    completion: call(`getKey${color}`, `getKey${color}()`),
+  })),
   {
     label: 'getKeyRed', kind: 'Function', detail: 'Get the red key, if there is one',
     doc: "getKeyRed()\n\nGets the first Red Key in this level, or null if there isn't one.\nUse key.onCollision(callback) to run code when the player touches it.",
@@ -376,6 +386,8 @@ export const API_DOCS = [
 /** Beginner-friendly JavaScript statement templates. */
 export const KEYWORD_DOCS = [
   statement('if', 'if (condition) {\n\t\n}', 'if (${1:condition}) {\n\t${0}\n}', '// Check if a condition is true\nif (${1:condition}) {\n\t// Code here runs when the condition is true\n\t${0}\n}'),
+  statement('if else', 'if (condition) {\n\t\n} else {\n\t\n}', 'if (${1:condition}) {\n\t${2}\n} else {\n\t${0}\n}', '// Choose between two paths\nif (${1:condition}) {\n\t// Code here runs when the condition is true\n\t${2}\n} else {\n\t// Code here runs otherwise\n\t${0}\n}'),
+  statement('function', 'function myFunction() {\n\t\n}', 'function ${1:myFunction}() {\n\t${2}\n}\n${0}', '// Create a function you can call later\nfunction ${1:myFunction}() {\n\t${2:// Your code here}\n}\n\n${0}'),
   statement('for', 'for (;;) {\n\t\n}', 'for (let i = 0; i < ${1:5}; i++) {\n\t${0}\n}', '// Repeat this code 5 times\nfor (let i = 0; i < ${1:5}; i++) {\n\t// Code to repeat\n\t${0}\n}'),
   statement('while', 'while (condition) {\n\t\n}', 'while (${1:condition}) {\n\t${0}\n}', '// Repeat while this condition is true\nwhile (${1:condition}) {\n\t// Code to repeat\n\t// Make sure the condition can eventually become false\n\t${0}\n}'),
 ];

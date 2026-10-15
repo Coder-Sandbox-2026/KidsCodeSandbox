@@ -298,6 +298,88 @@ export class EnvironmentResources {
     return this.geometries.get(key);
   }
 
+  /** Snow checkerboard with inexpensive per-tile center-to-edge gradients. */
+  snowChecker(x, z, w, d, tileSize = TILE_SIZE) {
+    const key = `snowChecker:${x}:${z}:${w}:${d}:${tileSize}`;
+    if (!this.geometries.has(key)) {
+      const positions = [], colors = [];
+      const left = x - w / 2, right = x + w / 2, back = z - d / 2, front = z + d / 2;
+      const white = new THREE.Color(0xeaf5fa);
+      const cyan = new THREE.Color(0xc8e6f2);
+      const paleBlue = new THREE.Color(0xd8edf5);
+      const lavender = new THREE.Color(0xdee5f5);
+      for (let ix = Math.floor(left / tileSize); ix < Math.ceil(right / tileSize); ix++) {
+        for (let iz = Math.floor(back / tileSize); iz < Math.ceil(front / tileSize); iz++) {
+          const x0 = Math.max(left, ix * tileSize), x1 = Math.min(right, (ix + 1) * tileSize);
+          const z0 = Math.max(back, iz * tileSize), z1 = Math.min(front, (iz + 1) * tileSize);
+          const alternate = (ix + iz) & 1;
+          const seed = (Math.abs(ix * 17 + iz * 31) % 7) / 6;
+          const center = (alternate ? cyan : white).clone().lerp(alternate ? lavender : paleBlue, seed * 0.16);
+          const edge = (alternate ? white : paleBlue).clone().lerp(lavender, seed * 0.10);
+          const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+          const corners = [[x0, z0], [x0, z1], [x1, z1], [x1, z0]];
+          for (let i = 0; i < 4; i++) {
+            const next = (i + 1) % 4;
+            positions.push(cx, 0, cz, corners[i][0], 0, corners[i][1], corners[next][0], 0, corners[next][1]);
+            for (const color of [center, edge, edge]) colors.push(color.r, color.g, color.b);
+          }
+        }
+      }
+      this.geometries.set(key, coloredGeometry(positions, colors));
+    }
+    return this.geometries.get(key);
+  }
+
+  /** Closed snow cap: a checker-gradient top plus simple visible side faces. */
+  snowCheckerBox(x, z, w, d, h, tileSize = TILE_SIZE) {
+    const key = `snowCheckerBox:${x}:${z}:${w}:${d}:${h}:${tileSize}`;
+    if (!this.geometries.has(key)) {
+      const positions = [], colors = [];
+      const left = x - w / 2, right = x + w / 2, back = z - d / 2, front = z + d / 2;
+      const white = new THREE.Color(0xeaf5fa);
+      const cyan = new THREE.Color(0xc8e6f2);
+      const paleBlue = new THREE.Color(0xd8edf5);
+      const lavender = new THREE.Color(0xdee5f5);
+      const topY = h / 2;
+
+      // Build the cap top directly in cap-local coordinates. Do not borrow the
+      // cached world-space floor geometry: each cap owns a closed,
+      // non-overlapping top/sides buffer with one consistent Y plane.
+      for (let ix = Math.floor(left / tileSize); ix < Math.ceil(right / tileSize); ix++) {
+        for (let iz = Math.floor(back / tileSize); iz < Math.ceil(front / tileSize); iz++) {
+          const x0 = Math.max(left, ix * tileSize), x1 = Math.min(right, (ix + 1) * tileSize);
+          const z0 = Math.max(back, iz * tileSize), z1 = Math.min(front, (iz + 1) * tileSize);
+          const alternate = (ix + iz) & 1;
+          const seed = (Math.abs(ix * 17 + iz * 31) % 7) / 6;
+          const center = (alternate ? cyan : white).clone().lerp(alternate ? lavender : paleBlue, seed * 0.16);
+          const edgeColor = (alternate ? white : paleBlue).clone().lerp(lavender, seed * 0.10);
+          const cx = (x0 + x1) / 2 - x, cz = (z0 + z1) / 2 - z;
+          const corners = [[x0 - x, z0 - z], [x0 - x, z1 - z], [x1 - x, z1 - z], [x1 - x, z0 - z]];
+          for (let i = 0; i < 4; i++) {
+            const next = (i + 1) % 4;
+            positions.push(cx, topY, cz, corners[i][0], topY, corners[i][1], corners[next][0], topY, corners[next][1]);
+            for (const color of [center, edgeColor, edgeColor]) colors.push(color.r, color.g, color.b);
+          }
+        }
+      }
+
+      const edge = new THREE.Color(0xd0e4ee);
+      const addQuad = (a, b, c, dPoint) => {
+        for (const point of [a, b, c, a, c, dPoint]) {
+          positions.push(...point);
+          colors.push(edge.r, edge.g, edge.b);
+        }
+      };
+      const y0 = -h / 2, y1 = h / 2;
+      addQuad([-w / 2, y0, d / 2], [w / 2, y0, d / 2], [w / 2, y1, d / 2], [-w / 2, y1, d / 2]);
+      addQuad([w / 2, y0, -d / 2], [-w / 2, y0, -d / 2], [-w / 2, y1, -d / 2], [w / 2, y1, -d / 2]);
+      addQuad([-w / 2, y0, -d / 2], [-w / 2, y0, d / 2], [-w / 2, y1, d / 2], [-w / 2, y1, -d / 2]);
+      addQuad([w / 2, y0, d / 2], [w / 2, y0, -d / 2], [w / 2, y1, -d / 2], [w / 2, y1, d / 2]);
+      this.geometries.set(key, coloredGeometry(positions, colors));
+    }
+    return this.geometries.get(key);
+  }
+
   // Permanent engine teardown only; level.clear() must never dispose this cache.
   dispose() {
     for (const geometry of this.geometries.values()) geometry.dispose();

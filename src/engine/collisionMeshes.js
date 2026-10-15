@@ -22,6 +22,7 @@ export const COL_PREFIX = 'COL_';
 export const ITEM_PREFIX = 'ITEM_';
 export const TRIGGER_PREFIX = 'TRIGGER_';
 export const MOVCOL_PREFIX = 'MOVCOL_';
+export const WALL_PREFIX = 'WALL_';
 
 function nodeName(obj) {
   return String(obj?.name ?? '').trim();
@@ -41,6 +42,10 @@ export function isTriggerNode(obj) {
 
 export function isMovingColliderNode(obj) {
   return !!obj && nodeName(obj).startsWith(MOVCOL_PREFIX);
+}
+
+export function isWallNode(obj) {
+  return !!obj && nodeName(obj).startsWith(WALL_PREFIX);
 }
 
 export function isColMesh(obj) {
@@ -395,6 +400,7 @@ export function stripAndBakeCollisionMeshes(root, { worldSpace = false } = {}) {
     : (node) => cuboidInRootSpace(node, root);
 
   const colNodes = collectChildHelperNodes(root, isColNode);
+  const wallNodes = collectChildHelperNodes(root, isWallNode);
   const itemNodes = collectChildHelperNodes(root, isItemNode);
 
   for (const node of colNodes) {
@@ -416,6 +422,21 @@ export function stripAndBakeCollisionMeshes(root, { worldSpace = false } = {}) {
       });
     }
     detachNode(node);
+  }
+
+  // WALL_ meshes remain visible, but also contribute fixed trimesh collision.
+  for (const node of wallNodes) {
+    const meshes = collectMeshesUnder(node);
+    const triangles = meshes.map(trianglesOf).filter(Boolean);
+    for (const [index, tri] of triangles.entries()) {
+      parts.push({
+        role: 'col',
+        name: triangles.length > 1 ? `${nodeName(node)}:${tri.name || index}` : nodeName(node),
+        parentName: nodeName(node.parent),
+        vertices: tri.vertices,
+        indices: tri.indices,
+      });
+    }
   }
 
   for (const node of itemNodes) {

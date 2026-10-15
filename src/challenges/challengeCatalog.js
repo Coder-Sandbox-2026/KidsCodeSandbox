@@ -105,12 +105,38 @@ export const CHALLENGES = Object.freeze([
 }),
   Object.freeze({
   "id": 12,
-  "title": "Challenge 12 \u2014 Water Playground",
-  ...FIRST_MESSAGE_OBJECTIVE
+  "title": "Challenge 12 \u2014 Are You High Enough?",
+  "objective": "Your code can make decisions!\n\nThe height is currently 10.\n\nUse an if statement to check whether the height is greater than 5.\n\nIf it is, display:\n\nYou are high enough!",
+  "example": "let height = 10;\n\nif (height > 5) {\n  print(\"You are high enough!\");\n}",
+  "help": "let height = 10; creates a variable holding the number 10. if checks whether something is true. > means greater than. { } surrounds the instructions to execute when the condition is true. print() displays the message. If height were 3, the message would not appear because 3 is not greater than 5. After completing the challenge, try changing height to 3 and run your code again.",
+  "helpExample": "let height = 10;\n\nif (height > 5) {\n  print(\"You are high enough!\");\n}",
+  "validation": "heightIf"
 }),
   Object.freeze({
   "id": 13,
-  "title": "Challenge 13 — Your First Message",
-  ...FIRST_MESSAGE_OBJECTIVE
+  "title": "Challenge 13 \u2014 Make a Choice!",
+  "objective": "It's cold in Snow Maze!\n\nThe temp is -5.\n\nWrite an if / else statement that checks temp.\n\nIf temp is below 0, display:\n\nWear a coat!\n\nOtherwise, display:\n\nNo coat needed!",
+  "example": "let temp = -5;\n\nif (temp < 0) {\n  print(\"Wear a coat!\");\n} else {\n  print(\"No coat needed!\");\n}",
+  "help": "let temp = -5; stores the current value. < means less than. if runs its code when the condition is true. else runs when the condition is false. Only one branch runs during a single decision. A temp of -5 means Wear a coat! A temp of 10 means No coat needed! After completing the challenge, try changing temp to 10 and run your code again.",
+  "helpExample": "let temp = -5;\n\nif (temp < 0) {\n  print(\"Wear a coat!\");\n} else {\n  print(\"No coat needed!\");\n}",
+  "validation": "temperatureIfElse"
+}),
+  Object.freeze({
+  "id": 14,
+  "title": "Challenge 14 \u2014 Repeat It!",
+  "objective": "Want to repeat something without writing the same code again and again?\n\nUse a for loop to repeat an action.\n\nThe example below prints Hello! three times.\n\nTry changing the number 3 to see what happens!",
+  "example": "for (let i = 0; i < 3; i++) {\n  print(\"Hello!\");\n}",
+  "help": "A for loop repeats the instructions inside { }. It has three parts: let i = 0 starts counting at zero, i < 3 keeps repeating while the number is below three, and i++ adds one after each repeat.",
+  "helpExample": "for (let i = 0; i < 3; i++) {\n  print(\"Hello!\");\n}",
+  "validation": "for"
+}),
+  Object.freeze({
+  "id": 15,
+  "title": "Challenge 15 \u2014 Make Your Own Function!",
+  "objective": "You've already used functions like print() and createCube.\n\nNow it's time to make your own!\n\nA function is a group of instructions you can run whenever you want.\n\nCreate a function and call it to make something happen!",
+  "example": "function sayHello() {\n  print(\"Hello from my function!\");\n}\n\nsayHello();",
+  "help": "function tells JavaScript you are creating a function. sayHello is the name. () is part of the function declaration and call. { } contains the instructions. Creating a function does not run it automatically, so sayHello(); calls it.",
+  "helpExample": "function sayHello() {\n  print(\"Hello from my function!\");\n}\n\nsayHello();",
+  "validation": "functionCall"
 })
 ]);

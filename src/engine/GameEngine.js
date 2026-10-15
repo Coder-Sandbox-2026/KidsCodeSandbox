@@ -21,6 +21,7 @@ import { appSettings } from '../settings/appSettings.js';
 import { GRAPHICS_PROFILES } from '../settings/graphicsProfiles.js';
 import { createModelFactories } from '../api/ModelFactory.js';
 import { isAccessibleLevelId } from '../config/levelAccess.js';
+import { Snowfall } from './Snowfall.js';
 
 export class GameEngine {
   constructor(container, { fpsDebug = false } = {}) {
@@ -42,6 +43,7 @@ export class GameEngine {
     this.levelId = 'default';
     this.environmentResources = new EnvironmentResources();
     this.vfx = null;
+    this.snowfall = null;
 
     // State
     this.running = false;
@@ -252,9 +254,11 @@ export class GameEngine {
 
     this.vfx?.update(dt);
     this.level?.update?.(dt);
+    this.snowfall?.update(dt);
     updateGoldStars(this, dt);
     for (const coin of this.goldCoins ?? []) coin.updateCoin(dt);
-    for (const key of this.redKeys ?? []) key.updateRedKey(dt);
+    const activeKeys = this.keys?.values?.() ?? [this.redKeys ?? []];
+    for (const keys of activeKeys) for (const key of keys) key.updateRedKey(dt);
 
     this.renderer.render(this.sceneManager.scene, this.sceneManager.camera);
   }
@@ -316,6 +320,7 @@ export class GameEngine {
     this.level.engine = this;
     this.level.build();
     this.sceneManager.applyEnvironment?.(this.level.environment ?? 'day');
+    this._setupSnowfall();
     const config = CHALLENGE_LEVEL_CONFIG[this.levelId.replace('challenge-', '')];
     const spawn = this.level.playerSpawn;
     if (spawn || config) {
@@ -336,6 +341,16 @@ export class GameEngine {
     if (levelId !== 'default' && !Object.hasOwn(CHALLENGE_LEVEL_CLASSES, levelId)) throw new Error(`Unknown level: ${levelId}`);
     if (levelId !== 'default' && !isAccessibleLevelId(levelId)) return 'challenge-1';
     return levelId;
+  }
+
+  _setupSnowfall() {
+    this.snowfall?.dispose();
+    this.snowfall = null;
+    const match = /^challenge-(\d+)$/.exec(this.levelId);
+    if (!match || Number(match[1]) < 12) return;
+    this.snowfall = new Snowfall(this.scene, () => this.player?.position, {
+      roofed: this.levelId === 'challenge-14',
+    });
   }
 
   /** Clear student-created objects while preserving stage-owned collectibles. */
@@ -374,6 +389,8 @@ export class GameEngine {
     levelId = this._validateLevelId(levelId);
     this.runs.invalidate();
     this.clearUserObjects({ includeStageObjects: true });
+    this.snowfall?.dispose();
+    this.snowfall = null;
     this.vfx?.releaseTyphoonTextures();
     this.level.clear();
     this.player.dispose();
@@ -396,6 +413,8 @@ export class GameEngine {
   clearScene() {
     this.runs.invalidate();
     this.clearUserObjects({ includeStageObjects: true });
+    this.snowfall?.dispose();
+    this.snowfall = null;
     this.vfx?.releaseTyphoonTextures();
     this.level.clear();
     this.sceneManager.applyEnvironment?.('day');

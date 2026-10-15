@@ -3,9 +3,10 @@ import jump from '../assets/audio/jump.ogg?url';
 import charging from '../assets/audio/charging.ogg?url';
 import explosion from '../assets/audio/explosion.ogg?url';
 import Track01 from '../assets/music/Track01.ogg?url';
+import Frozen from '../assets/music/Frozen.ogg?url';
 
 export class AudioManager {
-  constructor(createAudio = url => new Audio(url), tracks = { Track01 }) {
+  constructor(createAudio = url => new Audio(url), tracks = { Track01, Frozen }) {
     this.createAudio = createAudio;
     this.tracks = tracks;
     this.sounds = new Map();
@@ -43,6 +44,10 @@ export class AudioManager {
     try {
       music.play()?.catch(() => { if (this.musicGeneration === generation) this.musicActive = false; });
     } catch { this.musicActive = false; }
+  }
+  playMusicForLevel(levelId = 'default') {
+    const match = /^challenge-(\d+)$/.exec(levelId);
+    this.playMusic(match && Number(match[1]) >= 12 ? 'Frozen' : 'Track01');
   }
   setMusicVolume(volume) {
     this.musicVolume = Math.max(0, Math.min(1, volume));

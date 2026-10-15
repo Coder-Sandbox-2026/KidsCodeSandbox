@@ -67,7 +67,7 @@ function isExcluded(object) {
   let node = object;
   while (node) {
     const name = authoredName(node);
-    if (isHelperCollisionMesh(node) || name === 'PH_KeyRed') return true;
+    if (isHelperCollisionMesh(node) || /^PH_Key(?:Red|Green|Yellow|Blue)$/.test(name)) return true;
     node = node.parent;
   }
   return false;

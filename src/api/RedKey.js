@@ -4,9 +4,15 @@ import { GameObject } from './GameObject.js';
 export class RedKey extends GameObject {
   constructor(...args) {
     super(...args);
+    this.keyColor = this._keyColor ?? 'red';
     this._collectionArmed = !this._overlapsPlayer();
-    this.engine.redKeys ??= new Set();
-    this.engine.redKeys.add(this);
+    if (this.keyColor === 'red') {
+      this.engine.redKeys ??= new Set();
+      this.engine.redKeys.add(this);
+    }
+    this.engine.keys ??= new Map();
+    if (!this.engine.keys.has(this.keyColor)) this.engine.keys.set(this.keyColor, new Set());
+    this.engine.keys.get(this.keyColor).add(this);
     if (this._stageOwned) console.info('[RedKeyDebug] Stage-owned Red Key registered in the active world.');
   }
 
@@ -44,7 +50,8 @@ export class RedKey extends GameObject {
   }
 
   destroy() {
-    this.engine.redKeys?.delete(this);
+    if (this.keyColor === 'red') this.engine.redKeys?.delete(this);
+    this.engine.keys?.get(this.keyColor)?.delete(this);
     super.destroy();
   }
 }

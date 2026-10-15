@@ -189,6 +189,21 @@ test('music is looping, idempotent across Run/Reset calls, and stopped by Stop',
   audio.stopMusic(); assert.equal(music.currentTime, 0); assert.equal(music.paused, true);
 });
 
+test('level music switches to Frozen from Level 12 onward', () => {
+  const instances = [];
+  const audio = new AudioManager(url => {
+    const sound = { url, play() { return Promise.resolve(); }, pause() {} };
+    instances.push(sound); return sound;
+  });
+  audio.playMusicForLevel('challenge-11');
+  audio.playMusicForLevel('challenge-12');
+  audio.playMusicForLevel('challenge-15');
+  audio.playMusicForLevel('challenge-11');
+  assert.equal(instances.length, 2);
+  assert.equal(instances[0].url, audio.tracks.Track01);
+  assert.equal(instances[1].url, audio.tracks.Frozen);
+});
+
 test('explosion start plays charging immediately and later events do not replay it', async () => {
   const events = new Map(), sounds = [], impulses = [];
   const effect = { object3D: new THREE.Group(), config: {}, dispose() {},

@@ -1,6 +1,7 @@
 # Installed and built locally. GitHub Actions runs npm ci + npm run build.
 node_modules/
 dist/
+build/
 KidsCode3D.html
 
 # Development caches and test output. None are shipped with the live app.
@@ -21,6 +22,10 @@ start.bat
 .DS_Store
 Thumbs.db
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 .env
 .env.*
 .vscode/

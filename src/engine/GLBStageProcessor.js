@@ -7,48 +7,46 @@ function authoredName(object) {
 }
 
 /** Exact authored placeholder classification. Groups with this name are not markers. */
-export function isRedKeyPlaceholder(object) {
-  return !!object?.isMesh && authoredName(object) === 'PH_KeyRed';
+export function keyPlaceholderColor(object) {
+  if (!object?.isMesh) return null;
+  const match = authoredName(object).match(/^PH_Key(Red|Green|Yellow|Blue)$/i);
+  return match ? match[1].toLowerCase() : null;
 }
 
+export function isRedKeyPlaceholder(object) { return keyPlaceholderColor(object) === 'red'; }
+
 /** Replace all red-key markers without mutating the hierarchy during traversal. */
-export function spawnRedKeyPlaceholders(root, engine) {
+export function spawnKeyPlaceholders(root, engine) {
   root.updateMatrixWorld(true);
   const placeholders = [];
   root.traverse(object => {
-    if (isRedKeyPlaceholder(object)) placeholders.push(object);
+    const color = keyPlaceholderColor(object);
+    if (color) placeholders.push({ object, color });
   });
 
   if (!placeholders.length) return 0;
-  console.info(`[RedKeyDebug] Found ${placeholders.length} PH_KeyRed placeholder(s).`);
-
-  const createRedKey = engine?.modelFactories?.createRedKey ?? engine?.models?.createRedKey;
-  if (typeof createRedKey !== 'function') {
-    console.warn('[RedKeyDebug] Red Key factory is unavailable; placeholders were removed without spawning keys.');
-    const positions = placeholders.map(placeholder => placeholder.getWorldPosition(new THREE.Vector3()).toArray());
-    for (const placeholder of placeholders) {
-      placeholder.visible = false;
-      placeholder.removeFromParent();
-    }
-    return positions.length;
-  }
-
   const positions = [];
-  for (const [index, placeholder] of placeholders.entries()) {
+  for (const { object: placeholder, color } of placeholders) {
     const position = placeholder.getWorldPosition(new THREE.Vector3()).toArray();
     positions.push(position);
     placeholder.visible = false;
     placeholder.removeFromParent();
+    const name = `create${color[0].toUpperCase()}${color.slice(1)}Key`;
+    const createKey = engine?.modelFactories?.[name] ?? engine?.models?.[name];
+    if (typeof createKey !== 'function') {
+      console.warn(`[KeyDebug] ${name} factory is unavailable; placeholder removed.`);
+      continue;
+    }
     try {
-      const key = createRedKey({ position, stageOwned: true });
-      if (!key) throw new Error('factory returned no object');
-      console.info(`[RedKeyDebug] Spawned and registered Red Key ${index + 1}/${placeholders.length} at ${position.join(', ')}.`);
+      createKey({ position, stageOwned: true });
     } catch (error) {
-      console.warn(`[RedKeyDebug] Could not spawn Red Key ${index + 1}/${placeholders.length}:`, error);
+      console.warn(`[KeyDebug] Could not spawn ${color} key:`, error);
     }
   }
   return positions.length;
 }
+
+export const spawnRedKeyPlaceholders = spawnKeyPlaceholders;
 
 /**
  * Process a scene after it has its final scene parent and world transform.
@@ -59,7 +57,7 @@ export function processGLBStage(root, { engine, physics, physicsBodies = [] } = 
   if (!root) return { bakedParts: [], stageColliderParts: [], stageInteractionParts: [], redKeyCount: 0 };
 
   configureImportedShadows(root, { scene: root.parent ?? engine?.scene });
-  const redKeyCount = spawnRedKeyPlaceholders(root, engine);
+  const redKeyCount = spawnKeyPlaceholders(root, engine);
   const bakedParts = stripAndBakeCollisionMeshes(root, { worldSpace: true });
   const stageColliderParts = bakedParts.filter(part => part.role === 'col');
   const stageInteractionParts = bakedParts.filter(part => part.role === 'trigger' || part.role === 'movcol');

@@ -32,21 +32,21 @@ function assignedExpression(name, source) {
   return expression;
 }
 
-function isRedKeyExpression(expression, source, seen = new Set()) {
+function isKeyExpression(expression, source, seen = new Set()) {
   const value = String(expression ?? '').trim().replace(/;$/, '').trim();
-  if (/^(?:getKeyRed|keyRed)\s*\(\s*\)\s*(?:\?\.)?$/.test(value)) return true;
+  if (/^(?:getKey(?:Red|Green|Yellow|Blue)|key(?:Red|Green|Yellow|Blue))\s*\(\s*\)\s*(?:\?\.)?$/.test(value)) return true;
   if (!/^[A-Za-z_$][\w$]*$/.test(value) || seen.has(value)) return false;
   seen.add(value);
-  return isRedKeyExpression(assignedExpression(value, source, seen), source, seen);
+  return isKeyExpression(assignedExpression(value, source, seen), source, seen);
 }
 
 /** Return the member catalog for a receiver immediately before its dot. */
 export function memberDocsForSource(source) {
   const text = String(source ?? '');
-  if (/(?:getKeyRed|keyRed)\s*\(\s*\)\s*\?\.\s*$/.test(text)) return RED_KEY_MEMBER_DOCS;
+  if (/(?:getKey(?:Red|Green|Yellow|Blue)|key(?:Red|Green|Yellow|Blue))\s*\(\s*\)\s*\?\.\s*$/.test(text)) return RED_KEY_MEMBER_DOCS;
   const owner = text.match(/(?:^|[^\w$])([A-Za-z_$][\w$]*)\s*\.\s*$/)?.[1];
   if (!owner) return null;
-  return isRedKeyExpression(assignedExpression(owner, text), text)
+  return isKeyExpression(assignedExpression(owner, text), text)
     ? RED_KEY_MEMBER_DOCS
     : null;
 }
@@ -167,7 +167,7 @@ export function registerAutocomplete(monaco, { getPlayerPosition } = {}) {
           const factory = assignments.filter(match => match[1] === owner).at(-1)?.[2];
           const entry = API_DOCS.find(item => item.label === factory);
           if (entry?.label === 'getPlayer') docs = PLAYER_DOCS;
-          else if (entry?.label === 'getDoorRed') docs = MEMBER_DOCS.filter(item => item.label === 'lockDoor');
+          else if (entry?.label?.match(/^getDoor(Red|Green|Yellow|Blue)$/)) docs = MEMBER_DOCS.filter(item => item.label === 'lockDoor');
           else if (entry && (entry.label.startsWith('create') || entry.label === 'findObject')) docs = MEMBER_DOCS;
         }
         return { incomplete: true, suggestions: (docs || []).filter(item => matches(item.label))

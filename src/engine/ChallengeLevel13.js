@@ -138,6 +138,7 @@ export class ChallengeLevel13 extends ChallengeLevel1 {
     this.stageRoot = null;
     this.playerSpawn = null;
     this.door = null;
+    this.doors = new Map();
     this.interactionSystem = null;
     this._onDoorTestKeyDown = null;
     this._doorDiagnosticSamples = 0;
@@ -163,18 +164,24 @@ export class ChallengeLevel13 extends ChallengeLevel1 {
       physicsBodies: this.physicsBodies,
     });
 
-    this._buildRedDoorInteraction(stageInteractionParts);
+    this._buildDoorInteractions(stageInteractionParts);
     console.info(`[RedKeyDebug] Active Red Keys after Level 13 initialization: ${this.engine?.redKeys?.size ?? 0}.`);
 
     this.playerSpawn = stageSpawn;
     this._buildClouds();
   }
 
-  _buildRedDoorInteraction(stageInteractionParts) {
-    const triggerPart = stageInteractionParts.find(part => part.role === 'trigger');
-    const colliderPart = stageInteractionParts.find(part => part.role === 'movcol');
+  _buildDoorInteractions(stageInteractionParts) {
+    const colors = ['Red', 'Green', 'Yellow', 'Blue'];
+    for (const color of colors) this._buildDoorInteraction(color, stageInteractionParts);
+    this.door = this.doors.get('red') ?? null;
+  }
+
+  _buildDoorInteraction(color, stageInteractionParts) {
+    const association = authoredAssociationKey(`Door${color}`);
+    const triggerPart = stageInteractionParts.find(part => part.role === 'trigger' && part.associationKey === association);
+    const colliderPart = stageInteractionParts.find(part => part.role === 'movcol' && part.associationKey === association);
     if (!triggerPart || !colliderPart) {
-      console.warn('[level-13] stage13.glb is missing a TRIGGER_ or MOVCOL_ door volume.');
       return;
     }
 
@@ -195,12 +202,13 @@ export class ChallengeLevel13 extends ChallengeLevel1 {
     const doorBounds = new THREE.Box3().setFromObject(doorObject);
     const floorY = colliderPart.ty - colliderPart.hy;
     const travelDistance = Math.max(colliderPart.hy * 2 + 0.25, doorBounds.max.y - floorY + 0.25);
-    this.door = new Door({
+    const door = new Door({
       physics: this.physics,
       object: doorObject,
       colliderPart,
       travel: new THREE.Vector3(0, -travelDistance, 0),
       locked: true,
+      keyColor: color.toLowerCase(),
     });
     if (this.engine?.player?.movementController) {
       this.engine.player.movementController.contactDiagnosticEnabled = true;
@@ -208,7 +216,8 @@ export class ChallengeLevel13 extends ChallengeLevel1 {
     const promptHost = typeof document === 'undefined'
       ? null
       : document.getElementById('viewport-pane');
-    this.interactionSystem = new InteractionSystem({
+    this.doors.set(color.toLowerCase(), door);
+    this.interactionSystem ??= new InteractionSystem({
       getPlayer: () => this.engine?.player,
       isActive: () => this.engine?.level === this && this.engine?.levelId === 'challenge-13',
       promptHost,
@@ -217,14 +226,14 @@ export class ChallengeLevel13 extends ChallengeLevel1 {
       bounds: boundsFromPart(triggerPart),
       object: doorObject,
       label: `${INTERACTION_KEY_LABEL} Open Door`,
-      isAvailable: () => this.door?.target === 0 && this.door?.value === 0,
+      isAvailable: () => door.target === 0 && door.value === 0,
       onInteract: () => {
-        if (this.door?.target !== 0 || this.door?.value !== 0) return false;
-        if (this.door?.locked && this.door.target === 0 && this.door.value === 0) {
+        if (door.target !== 0 || door.value !== 0) return false;
+        if (door.locked && door.target === 0 && door.value === 0) {
           this.interactionSystem.notify('This door is locked.');
           return false;
         }
-        if (this.door.target === 0 && this.door.value === 0) return this.door.setOpen(true);
+        if (door.target === 0 && door.value === 0) return door.setOpen(true);
         return false;
       },
     });
@@ -234,15 +243,15 @@ export class ChallengeLevel13 extends ChallengeLevel1 {
         || this.engine.level !== this || this.engine.levelId !== 'challenge-13') return;
       if (event.target?.closest?.('input, textarea, select, button, [contenteditable], .monaco-editor, dialog')) return;
       if (!this.engine.player?.input?.active) return;
-      if (this.door.setOpen(false, moving => !moving.containsPlayerAtClosedPosition(this.engine.player))) {
+      if (door.setOpen(false, moving => !moving.containsPlayerAtClosedPosition(this.engine.player))) {
         event.preventDefault();
       }
     };
-    if (typeof document !== 'undefined') document.addEventListener('keydown', this._onDoorTestKeyDown);
+    if (!this._onDoorTestKeyDown && typeof document !== 'undefined') document.addEventListener('keydown', this._onDoorTestKeyDown);
   }
 
   updateBeforePhysics(dt) {
-    this.door?.update(dt);
+    for (const door of this.doors.values()) door.update(dt);
   }
 
   update() {
@@ -304,13 +313,14 @@ export class ChallengeLevel13 extends ChallengeLevel1 {
       document.removeEventListener('keydown', this._onDoorTestKeyDown);
     }
     this.interactionSystem?.dispose();
-    this.door?.dispose();
+    for (const door of this.doors.values()) door.dispose();
     if (this.engine?.player?.movementController) {
       this.engine.player.movementController.contactDiagnosticEnabled = false;
       this.engine.player.movementController.lastMovementContactSnapshot = null;
     }
     this.interactionSystem = null;
     this.door = null;
+    this.doors.clear();
     this._onDoorTestKeyDown = null;
     this._doorDiagnosticSamples = 0;
     this._doorDiagnosticSignature = '';

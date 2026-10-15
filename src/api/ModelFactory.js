@@ -49,6 +49,7 @@ function spawnCollectible(engine, modelId, defaultName, opts = {}, ItemClass = G
     ownsGeometry: false,
     ignorePlayer: opts.ignorePlayer,
     stageOwned: opts.stageOwned === true,
+    keyColor: opts.keyColor,
   });
   if (opts.name) obj.name = opts.name;
   if (opts.color) obj.setColor(opts.color);
@@ -90,9 +91,20 @@ export function createModelFactories(engine) {
     }, GoldStar);
   }
 
-  function createRedKey(opts = {}) {
-    return spawnCollectible(engine, RED_KEY_MODEL, 'keyRed', opts, RedKey);
+  function createColoredKey(color, opts = {}) {
+    const modelId = `${color}Key`;
+    return spawnCollectible(engine, modelId, `key${color[0].toUpperCase()}${color.slice(1)}`,
+      { ...opts, keyColor: color }, class extends RedKey {
+        constructor(root, gameEngine, physics, itemOpts) {
+          super(root, gameEngine, physics, itemOpts);
+          this.keyColor = color;
+        }
+      });
   }
+  function createRedKey(opts = {}) { return createColoredKey('red', opts); }
+  function createGreenKey(opts = {}) { return createColoredKey('green', opts); }
+  function createYellowKey(opts = {}) { return createColoredKey('yellow', opts); }
+  function createBlueKey(opts = {}) { return createColoredKey('blue', opts); }
 
-  return { createGoldCoin, createCake, createGoldStar, createRedKey };
+  return { createGoldCoin, createCake, createGoldStar, createRedKey, createGreenKey, createYellowKey, createBlueKey };
 }
