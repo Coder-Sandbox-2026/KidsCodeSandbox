@@ -74,7 +74,18 @@ async function harness(t) {
   await engine.physics.init();
   engine.player = new Player(engine.camera, engine.physics);
   engine.player.engine = engine;
-  engine.level = { build() {}, clear() {} };
+  const yellowDoor = { keyColor: 'yellow', lockDoor(locked) { this.locked = locked; } };
+  const greenDoor = { keyColor: 'green', lockDoor(locked) { this.locked = locked; } };
+  const greenKey = {
+    mesh: new THREE.Group(),
+    onCollision(callback) { this.collisionCallback = callback; },
+  };
+  engine.keys = new Map([['green', new Set([greenKey])]]);
+  engine.level = {
+    doors: new Map([['yellow', yellowDoor], ['green', greenDoor]]),
+    build() {}, clear() {},
+  };
+  engine.scene.add(greenKey.mesh);
   engine.levelLoaded = true;
   engine.running = true;
   engine._animId = 1;

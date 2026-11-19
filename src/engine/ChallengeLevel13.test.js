@@ -1,12 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { registerHooks } from 'node:module';
 import * as THREE from 'three';
-import {
-  isPlayerStartNode, playerDirectionFromMarker,
-} from './ChallengeLevel13.js';
-import { isRedKeyPlaceholder, spawnRedKeyPlaceholders } from './GLBStageProcessor.js';
-import { stripAndBakeCollisionMeshes } from './collisionMeshes.js';
-import { RedKey } from '../api/RedKey.js';
+
+// Resolve Vite's ?url imports to stable module values for Node's test loader.
+const hook = registerHooks({
+  resolve(specifier, context, next) {
+    if (specifier.endsWith('?url')) return {
+      url: `data:text/javascript,${encodeURIComponent(`export default ${JSON.stringify(new URL(specifier, context.parentURL).href)}`)}`,
+      shortCircuit: true,
+    };
+    return next(specifier, context);
+  },
+});
+const { isPlayerStartNode, playerDirectionFromMarker } = await import('./ChallengeLevel13.js');
+const { isRedKeyPlaceholder, spawnRedKeyPlaceholders } = await import('./GLBStageProcessor.js');
+const { stripAndBakeCollisionMeshes } = await import('./collisionMeshes.js');
+const { RedKey } = await import('../api/RedKey.js');
+hook.deregister();
 
 test('PLAYER_START classification is exact and supports authored glTF names', () => {
   assert.equal(isPlayerStartNode({ name: 'PLAYER_START' }), true);
