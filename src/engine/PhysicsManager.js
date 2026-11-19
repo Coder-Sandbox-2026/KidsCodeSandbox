@@ -10,6 +10,7 @@
  *               with setTranslation/setRotation so the character controller
  *               treats them like the fixed walls used by authored COL_.
  */
+import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 
 export class PhysicsManager {
@@ -127,10 +128,10 @@ export class PhysicsManager {
    * @param {import('three').Object3D} mesh
    * @param {Array<{ desc: any, sensor?: boolean }>} setups
    */
-  addKinematic(mesh, setups) {
+  addKinematic(mesh, setups, { worldSpace = false } = {}) {
     const list = Array.isArray(setups) ? setups : [{ desc: setups, sensor: true }];
-    const p = mesh.position;
-    const q = mesh.quaternion;
+    const p = worldSpace ? mesh.getWorldPosition(new THREE.Vector3()) : mesh.position;
+    const q = worldSpace ? mesh.getWorldQuaternion(new THREE.Quaternion()) : mesh.quaternion;
     const bodyDesc = this.RAPIER.RigidBodyDesc.kinematicPositionBased()
       .setTranslation(p.x, p.y, p.z)
       .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w });
@@ -146,7 +147,7 @@ export class PhysicsManager {
     }
 
     const id = this._nextId++;
-    const entry = { body, mesh, collider: colliders[0], colliders };
+    const entry = { body, mesh, collider: colliders[0], colliders, worldSpace };
     this.kinematics.set(id, entry);
     return { id, body, collider: colliders[0], colliders };
   }
@@ -272,8 +273,8 @@ export class PhysicsManager {
    * KinematicCharacterController.computeColliderMovement() runs.
    */
   syncKinematicTransforms(immediate = false) {
-    for (const { body, mesh } of this.kinematics.values()) {
-      this._syncKinematicEntry({ body, mesh }, immediate);
+    for (const entry of this.kinematics.values()) {
+      this._syncKinematicEntry(entry, immediate);
     }
   }
 
@@ -281,6 +282,51 @@ export class PhysicsManager {
   syncKinematicTransform(id, immediate = true) {
     const entry = this.kinematics.get(id);
     if (entry) this._syncKinematicEntry(entry, immediate);
+  }
+
+  /** Promote an existing kinematic entry without creating another body. */
+  promoteKinematicToDynamic(id, {
+    mass,
+    restitution,
+    friction,
+    linearDamping,
+    angularDamping,
+    ccd = false,
+  } = {}) {
+    const entry = this.kinematics.get(id);
+    if (!entry) return null;
+    const body = entry.body;
+    body.setBodyType(this.RAPIER.RigidBodyType.Dynamic, true);
+    body.recomputeMassPropertiesFromColliders();
+    if (mass !== undefined) {
+      const colliderMass = Math.max(0, Number(body.mass()) || 0);
+      body.setAdditionalMass(Math.max(0, Number(mass) - colliderMass), true);
+    }
+    if (linearDamping !== undefined) body.setLinearDamping(Math.max(0, linearDamping));
+    if (angularDamping !== undefined) body.setAngularDamping(Math.max(0, angularDamping));
+    if (body.setCcdEnabled) body.setCcdEnabled(Boolean(ccd));
+    for (const col of entry.colliders || [entry.collider]) {
+      if (!col) continue;
+      if (friction !== undefined) col.setFriction(friction);
+      if (restitution !== undefined) col.setRestitution(restitution);
+    }
+    this.kinematics.delete(id);
+    this.bodies.set(id, entry);
+    return entry;
+  }
+
+  /** Demote an existing dynamic entry without creating another body. */
+  demoteDynamicToKinematic(id) {
+    const entry = this.bodies.get(id);
+    if (!entry) return null;
+    const body = entry.body;
+    body.setBodyType(this.RAPIER.RigidBodyType.KinematicPositionBased, true);
+    body.setCcdEnabled?.(false);
+    body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+    body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+    this.bodies.delete(id);
+    this.kinematics.set(id, entry);
+    return entry;
   }
 
   /** Update a scripted fixed solid before the next character query. */
@@ -293,9 +339,10 @@ export class PhysicsManager {
     entry.body.setRotation({ x: q.x, y: q.y, z: q.z, w: q.w }, true);
   }
 
-  _syncKinematicEntry({ body, mesh }, immediate) {
-    const p = mesh.position;
-    const q = mesh.quaternion;
+  _syncKinematicEntry(entry, immediate) {
+    const { body, mesh } = entry;
+    const p = entry.worldSpace ? mesh.getWorldPosition(new THREE.Vector3()) : mesh.position;
+    const q = entry.worldSpace ? mesh.getWorldQuaternion(new THREE.Quaternion()) : mesh.quaternion;
     if (immediate) {
       body.setTranslation({ x: p.x, y: p.y, z: p.z }, true);
       body.setRotation({ x: q.x, y: q.y, z: q.z, w: q.w }, true);
@@ -303,6 +350,21 @@ export class PhysicsManager {
       body.setNextKinematicTranslation({ x: p.x, y: p.y, z: p.z });
       body.setNextKinematicRotation({ x: q.x, y: q.y, z: q.z, w: q.w });
     }
+  }
+
+  _syncMeshFromBody({ body, mesh, worldSpace = false }) {
+    const t = body.translation();
+    const r = body.rotation();
+    if (!worldSpace || !mesh.parent) {
+      mesh.position.set(t.x, t.y, t.z);
+      mesh.quaternion.set(r.x, r.y, r.z, r.w);
+      return;
+    }
+    mesh.parent.updateMatrixWorld(true);
+    mesh.position.copy(mesh.parent.worldToLocal(new THREE.Vector3(t.x, t.y, t.z)));
+    const worldQuaternion = new THREE.Quaternion(r.x, r.y, r.z, r.w);
+    const parentQuaternion = mesh.parent.getWorldQuaternion(new THREE.Quaternion());
+    mesh.quaternion.copy(parentQuaternion).invert().multiply(worldQuaternion);
   }
 
   /** Remove a dynamic body by its id */
@@ -336,12 +398,7 @@ export class PhysicsManager {
     });
 
     // Sync mesh transforms from physics bodies
-    for (const { body, mesh } of this.bodies.values()) {
-      const t = body.translation();
-      const r = body.rotation();
-      mesh.position.set(t.x, t.y, t.z);
-      mesh.quaternion.set(r.x, r.y, r.z, r.w);
-    }
+    for (const entry of this.bodies.values()) this._syncMeshFromBody(entry);
   }
 
   /** Remove ALL dynamic + kinematic bodies (but keep statics for the level) */

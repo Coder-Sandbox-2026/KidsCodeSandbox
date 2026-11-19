@@ -9,16 +9,16 @@ function labels(source) {
 }
 
 test('Red Key member inference supports getters, aliases, and conditional source', () => {
-  assert.deepEqual(labels('const key = getKeyRed();\nkey.'), ['onCollision']);
-  assert.deepEqual(labels('let key = getKeyRed();\nkey.'), ['onCollision']);
+  assert.deepEqual(labels('const key = findKeyRed();\nkey.'), ['onCollision']);
+  assert.deepEqual(labels('let key = findKeyRed();\nkey.'), ['onCollision']);
   assert.deepEqual(labels('const key = keyRed();\nkey.'), ['onCollision']);
-  assert.deepEqual(labels('const key = getKeyRed();\nif (key) {\n  key.'), ['onCollision']);
-  assert.deepEqual(labels('const firstKey = getKeyRed();\nconst secondKey = firstKey;\nsecondKey.'), ['onCollision']);
-  assert.deepEqual(labels('getKeyRed()?.'), ['onCollision']);
+  assert.deepEqual(labels('const key = findKeyRed();\nif (key) {\n  key.'), ['onCollision']);
+  assert.deepEqual(labels('const firstKey = findKeyRed();\nconst secondKey = firstKey;\nsecondKey.'), ['onCollision']);
+  assert.deepEqual(labels('findKeyRed()?.'), ['onCollision']);
 });
 
 test('Red Key onCollision keeps the existing callback snippet and restricted catalog', () => {
-  const docs = memberDocsForSource('const key = getKeyRed();\nkey.');
+  const docs = memberDocsForSource('const key = findKeyRed();\nkey.');
   assert.deepEqual(docs.map(item => item.label), ['onCollision']);
   const item = findCompletion('onCollision', docs);
   const completion = buildCompletion(item, {

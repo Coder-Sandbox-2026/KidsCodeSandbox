@@ -17,7 +17,7 @@ export class RedKey extends GameObject {
   }
 
   _overlapsPlayer() {
-    const player = this.engine.getPlayer?.() ?? this.engine.player;
+    const player = this.engine.findPlayer?.() ?? this.engine.player;
     if (!player?.collider) return false;
     const info = this._physicsInfo ?? this._kinematicInfo;
     this.engine.physics.world.propagateModifiedBodyPositionsToColliders();

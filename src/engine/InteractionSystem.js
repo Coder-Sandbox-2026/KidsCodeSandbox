@@ -13,8 +13,8 @@ function containsPoint(bounds, point) {
 
 /** Small, reusable trigger + facing interaction selector for authored volumes. */
 export class InteractionSystem {
-  constructor({ getPlayer, isActive, promptHost }) {
-    this.getPlayer = getPlayer;
+  constructor({ findPlayer, isActive, promptHost }) {
+    this.findPlayer = findPlayer;
     this.isActive = isActive;
     this.entries = [];
     this.current = null;
@@ -33,7 +33,7 @@ export class InteractionSystem {
     this._onKeyDown = event => {
       if (event.code !== INTERACTION_KEY_CODE || event.repeat || !this.isActive()) return;
       if (event.target?.closest?.(UI_TARGET) || document.activeElement?.closest?.(UI_TARGET)) return;
-      const player = this.getPlayer();
+      const player = this.findPlayer();
       if (!player?.input?.active || !this.current) return;
       const entry = this.current;
       if (entry.isAvailable && !entry.isAvailable()) {
@@ -57,7 +57,7 @@ export class InteractionSystem {
   }
 
   update() {
-    const player = this.getPlayer();
+    const player = this.findPlayer();
     if (!this.isActive() || !player?.input?.active) {
       this.current = null;
       this._hidePrompt();

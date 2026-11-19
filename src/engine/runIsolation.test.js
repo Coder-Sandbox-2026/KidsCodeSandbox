@@ -162,7 +162,7 @@ for (const action of ['Run', 'Reset', 'Clear']) {
     const h = await harness(t);
     const { run, scope } = h.begin();
     const cube = scope.createCube();
-    const player = scope.getPlayer();
+    const player = scope.findPlayer();
     const setSpeed = player.setWalkSpeed;
     const position = cube.position;
     const gate = deferred();
@@ -178,7 +178,7 @@ for (const action of ['Run', 'Reset', 'Clear']) {
     assert.throws(() => setSpeed(99), RunCancelledError);
     assert.throws(() => { player.name = 'old'; }, RunCancelledError);
     assert.throws(() => { position.x = 99; }, RunCancelledError);
-    assert.throws(() => scope.getPlayer(), RunCancelledError);
+    assert.throws(() => scope.findPlayer(), RunCancelledError);
     assert.equal(h.engine.player.getWalkSpeed(), 7);
   });
 }
@@ -190,19 +190,19 @@ test('current API preserves identity, chaining, vector access, callbacks and phy
   assert.equal(cube, scope.findObject('cube'));
   assert.equal(cube.setColor('red'), cube);
   assert.equal(cube.position.set(1, 2, 3), cube.position);
-  assert.equal(scope.getPlayer().setWalkSpeed(8), scope.getPlayer());
+  assert.equal(scope.findPlayer().setWalkSpeed(8), scope.findPlayer());
   assert.equal(h.engine.player.getWalkSpeed(), 8);
   assert.equal(h.engine.physics.bodies.size, 1);
   let other;
   cube.onCollision(actor => { other = actor; });
   h.engine._notifyCollisionPair(h.api._objects[0], h.engine.player);
-  assert.equal(other, scope.getPlayer());
+  assert.equal(other, scope.findPlayer());
   let clicked;
   cube.onClick(event => { clicked = event.gameObject; event.gameObject.color = 'blue'; });
   h.api._objects[0]._triggerClick({ gameObject: h.api._objects[0], point: new THREE.Vector3() });
   assert.equal(clicked, cube);
   assert.equal(cube.color, '#0000ff');
-  scope.console.log(scope.getPlayer());
+  scope.console.log(scope.findPlayer());
   assert.match(h.output[0], /player/);
   scope.destroy(cube);
   assert.equal(h.engine.physics.bodies.size, 0);
@@ -216,7 +216,7 @@ test('ignorePlayer suppresses player events but keeps other collision events', a
   let ignoredHits = 0, otherHits = 0, playerHits = 0;
   ignored.onCollision(() => { ignoredHits++; });
   other.onCollision(() => { otherHits++; });
-  scope.getPlayer().onCollision(() => { playerHits++; });
+  scope.findPlayer().onCollision(() => { playerHits++; });
   const [ignoredRaw, otherRaw] = h.api._objects;
 
   h.engine._notifyCollisionPair(ignoredRaw, h.engine.player);
@@ -234,7 +234,7 @@ test('old update, click, collision, player and keyboard callbacks cannot fire in
   scope.update(hit);
   cube.onClick(hit);
   cube.onCollision(hit);
-  scope.getPlayer().onCollision(hit);
+  scope.findPlayer().onCollision(hit);
   scope.onKeyDown('KeyE', hit);
   scope.onKeyPressed('KeyE', hit);
   scope.onKeyReleased('KeyE', hit);
@@ -277,7 +277,7 @@ test('manually typed and autocomplete-formatted key code execute identically', a
 test('async callbacks already in flight cannot mutate a retained player after await', async t => {
   const h = await harness(t);
   const { scope } = h.begin();
-  const player = scope.getPlayer();
+  const player = scope.findPlayer();
   const gate = deferred();
   scope.update(async () => { await gate.promise; player.setWalkSpeed(99); });
   const pending = h.engine.userUpdateCallbacks[0]();
@@ -440,7 +440,7 @@ test('catalog answers complete through real run/API observations and stale obser
   }
   assert.equal(completions, CHALLENGES.length);
   h.begin();
-  assert.throws(() => oldScope.getPlayer(), RunCancelledError);
+  assert.throws(() => oldScope.findPlayer(), RunCancelledError);
   assert.equal(completions, CHALLENGES.length);
   h.api.reset();
 });
@@ -451,12 +451,12 @@ test('only successful console, shape and jump-force calls report; stale player m
   const calls = [];
   const scope = h.api.buildScope(run, { onCall: (name, value) => calls.push([name, value]) });
   scope.console.info('not log');
-  const player = scope.getPlayer();
+  const player = scope.findPlayer();
   assert.throws(() => player.setJumpForce(-1));
   scope.createSphere();
   player.setJumpForce(15);
   scope.console.log('hello');
-  assert.deepEqual(calls.map(([name]) => name), ['getPlayer', 'createSphere', 'setJumpForce', 'console.log']);
+  assert.deepEqual(calls.map(([name]) => name), ['findPlayer', 'createSphere', 'setJumpForce', 'console.log']);
   const setter = player.setJumpForce;
   h.begin();
   assert.throws(() => setter(20), RunCancelledError);
@@ -471,19 +471,19 @@ test('placement defaults use live unrounded player coordinates with explicit ove
   h.engine.models = { has: () => true, clone: () => ({ root: new THREE.Group(), colliderParts: [] }) };
   for (const name of ['createCone', 'createCake']) {
     h.engine.player.body.setTranslation({ x: 5.25, y: 2, z: -8.75 }, true);
-    const expected = h.engine.getPlayer().position.clone();
+    const expected = h.engine.findPlayer().position.clone();
     const object = scope[name]({ collision: false });
     assert.deepEqual([...object.position.toArray()], expected.toArray());
     const explicit = [10.12345, 2, -4];
     assert.deepEqual([...scope[name]({ position: explicit, collision: false }).position.toArray()], explicit);
     h.engine.player.body.setTranslation({ x: 12.25, y: 4, z: 3 }, true);
-    assert.deepEqual([...scope[name]({ collision: false }).position.toArray()], h.engine.getPlayer().position.toArray());
+    assert.deepEqual([...scope[name]({ collision: false }).position.toArray()], h.engine.findPlayer().position.toArray());
   }
-  const getPlayer = h.engine.getPlayer;
-  h.engine.getPlayer = () => null;
+  const findPlayer = h.engine.findPlayer;
+  h.engine.findPlayer = () => null;
   assert.deepEqual([...scope.createCube().position.toArray()], [0, 0, 0]);
   assert.deepEqual([...scope.createCake({ collision: false }).position.toArray()], [0, 0, 0]);
-  h.engine.getPlayer = () => { throw Error('not ready'); };
+  h.engine.findPlayer = () => { throw Error('not ready'); };
   assert.deepEqual([...scope.createCube().position.toArray()], [0, 0, 0]);
-  h.engine.getPlayer = getPlayer;
+  h.engine.findPlayer = findPlayer;
 });

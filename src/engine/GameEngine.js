@@ -15,6 +15,7 @@ import { RunLifecycle } from './RunLifecycle.js';
 import { AudioManager } from '../audio/AudioManager.js';
 import { CHALLENGE_LEVEL_CONFIG } from '../challenges/challengeLevelConfig.js';
 import { prepareChallengeLevel13 } from './ChallengeLevel13.js';
+import { prepareImportedStageLevels } from './ImportedStageLevels.js';
 import { updateGoldStars, clearGoldStars } from '../api/GoldStar.js';
 import * as THREE from 'three';
 import { appSettings } from '../settings/appSettings.js';
@@ -44,10 +45,12 @@ export class GameEngine {
     this.environmentResources = new EnvironmentResources();
     this.vfx = null;
     this.snowfall = null;
+    this.caughtSequence = null;
 
     // State
     this.running = false;
     this.clock = new THREE.Clock();
+    this._frameId = 0;
     this._animId = null;
     this.levelLoaded = false;
 
@@ -92,10 +95,12 @@ export class GameEngine {
 
     // Authored stages are prepared once; selecting/resetting them remains synchronous.
     await prepareChallengeLevel13({ modelLoader: this.models });
+    await prepareImportedStageLevels({ modelLoader: this.models });
 
     // Player is a first-class actor (movement + camera are swappable controllers)
     this.player = new Player(this.sceneManager.camera, this.physics);
     this.player.engine = this;
+    this.audio.attachListener(this.sceneManager.camera);
 
     // Post-processing (bloom)
     this.renderer.setupPostProcessing(this.sceneManager.scene, this.sceneManager.camera);
@@ -219,7 +224,7 @@ export class GameEngine {
   }
 
   /** The active player actor. */
-  getPlayer() {
+  findPlayer() {
     return this.player;
   }
 
@@ -247,13 +252,16 @@ export class GameEngine {
     this.player.update(dt);
     this.physics.step(dt);
     this._dispatchCollisions();
+    const frameId = ++this._frameId;
 
     for (const cb of this.userUpdateCallbacks) {
       try { cb(dt); } catch (e) { /* swallow per-frame errors once */ }
     }
 
     this.vfx?.update(dt);
-    this.level?.update?.(dt);
+    this.level?.update?.(dt, frameId);
+    this.caughtSequence?.update?.(dt);
+    this.audio.update(dt, this.player, this.camera);
     this.snowfall?.update(dt);
     updateGoldStars(this, dt);
     for (const coin of this.goldCoins ?? []) coin.updateCoin(dt);
@@ -319,6 +327,11 @@ export class GameEngine {
     this._applyWaterQuality();
     this.level.engine = this;
     this.level.build();
+    const hasKeys = [...(this.keys?.values?.() ?? [])].some(keys => keys?.size > 0);
+    this.audio.preloadForLevel?.({
+      drones: (this.level.drones?.length ?? 0) > 0,
+      keys: hasKeys,
+    });
     this.sceneManager.applyEnvironment?.(this.level.environment ?? 'day');
     this._setupSnowfall();
     const config = CHALLENGE_LEVEL_CONFIG[this.levelId.replace('challenge-', '')];
@@ -347,7 +360,7 @@ export class GameEngine {
     this.snowfall?.dispose();
     this.snowfall = null;
     const match = /^challenge-(\d+)$/.exec(this.levelId);
-    if (!match || Number(match[1]) < 12) return;
+    if (!match || Number(match[1]) < 12 || Number(match[1]) >= 16) return;
     this.snowfall = new Snowfall(this.scene, () => this.player?.position, {
       roofed: this.levelId === 'challenge-14',
     });
@@ -386,6 +399,7 @@ export class GameEngine {
 
   /** Full reset – clears user objects, rebuilds level, resets player */
   reset(levelId = this.levelId) {
+    this.caughtSequence?.cancel?.({ restorePlayer: false });
     levelId = this._validateLevelId(levelId);
     this.runs.invalidate();
     this.clearUserObjects({ includeStageObjects: true });
@@ -411,6 +425,7 @@ export class GameEngine {
 
   /** Clear the entire scene (including level) */
   clearScene() {
+    this.caughtSequence?.cancel?.({ restorePlayer: false });
     this.runs.invalidate();
     this.clearUserObjects({ includeStageObjects: true });
     this.snowfall?.dispose();

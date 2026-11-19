@@ -69,6 +69,7 @@ class OutputBloomPass extends UnrealBloomPass {
   }
 
   render(renderer, writeBuffer, readBuffer, deltaTime, maskActive) {
+    this.beforeBloomRender?.();
     this.blendMaterial.uniforms.sceneTexture.value = readBuffer.texture;
     super.render(renderer, writeBuffer, readBuffer, deltaTime, maskActive);
   }
@@ -92,6 +93,18 @@ export class Renderer {
     this.renderer.toneMapping = THREE.NeutralToneMapping;
     this.renderer.toneMappingExposure = 1.0;
     container.appendChild(this.renderer.domElement);
+    window.setBloomStrength = (value) => {
+      const strength = Number(value);
+      if (!Number.isFinite(strength) || !this.bloomPass) return;
+      this.bloomPass.strength = strength;
+      return strength;
+    };
+    window.setBloomRadius = (value) => {
+      const radius = Number(value);
+      if (!Number.isFinite(radius) || !this.bloomPass) return;
+      this.bloomPass.radius = radius;
+      return radius;
+    };
     this._applyShadowQuality();
 
     this.composer = null;
@@ -143,13 +156,18 @@ export class Renderer {
 
     const bloom = new OutputBloomPass(
       new THREE.Vector2(width, height),
-      0.4,   // strength
-      0.4,   // radius
-      0.85   // threshold
+      0.10,  // strength
+      0.10,  // radius
+      0.75   // threshold
     );
     bloom.setResolutionScale(this._getBloomResolutionScale());
     this.composer.addPass(bloom);
     this.bloomPass = bloom;
+    console.info('[Bloom] default settings:', {
+      strength: bloom.strength,
+      radius: bloom.radius,
+      threshold: bloom.threshold,
+    });
   }
 
   render(scene, camera) {

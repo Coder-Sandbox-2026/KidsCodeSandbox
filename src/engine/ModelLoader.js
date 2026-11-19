@@ -9,6 +9,8 @@ import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import {
   basisTranscoderPath, cakeUrl, goldCoinUrl, goldStarUrl, redKeyUrl, greenKeyUrl, yellowKeyUrl, blueKeyUrl, platformerTextureUrl,
+  droneAUrl, droneABinUrl, droneTextureUrl, droneImage1Url, droneImage2Url,
+  droneImage1PngUrl, droneImage2PngUrl, droneTexturePngUrl,
 } from '../assets/assetSource.js';
 import {
   stripAndBakeCollisionMeshes,
@@ -22,6 +24,7 @@ export const RED_KEY_MODEL = 'redKey';
 export const GREEN_KEY_MODEL = 'greenKey';
 export const YELLOW_KEY_MODEL = 'yellowKey';
 export const BLUE_KEY_MODEL = 'blueKey';
+export const DRONE_A_MODEL = 'droneA';
 
 const KTX2_ATTEMPTS = [
   { label: 'relative basis/', path: basisTranscoderPath() },
@@ -70,9 +73,7 @@ export class ModelLoader {
     this._gltf = new GLTFLoader();
     this._gltf.manager.setURLModifier((url) => {
       const normalized = decodeURIComponent(url).replaceAll('\\', '/');
-      return normalized.endsWith('/textures/platformer_texture3.ktx2')
-        ? platformerTextureUrl
-        : url;
+      return normalized.endsWith('/textures/platformer_texture3.ktx2') ? platformerTextureUrl : url;
     });
     this._ktx2 = null;
     this._envMap = null;
@@ -101,10 +102,16 @@ export class ModelLoader {
       }
     }
 
+    if (errors.length) this.lastError = errors[0];
+    try {
+      await this._loadDroneA();
+    } catch (err) {
+      this.lastError ??= err;
+      console.warn('[models] Could not load droneA.gltf:', err);
+    }
     if (this._models.size === 0 && errors.length) {
       throw errors[0];
     }
-    if (errors.length) this.lastError = errors[0];
     this.ready = true;
   }
 
@@ -173,6 +180,11 @@ export class ModelLoader {
     if (!mat) return mat;
     const copy = mat.clone();
     if (!copy.isMeshStandardMaterial && !copy.isMeshPhysicalMaterial) return copy;
+
+    if (style === 'drone') {
+      copy.needsUpdate = true;
+      return copy;
+    }
 
     if (style === GOLD_STAR_MODEL) {
       copy.envMap = this._envMap;
@@ -248,6 +260,30 @@ export class ModelLoader {
     });
   }
 
+  async _loadDroneA() {
+    const manager = new THREE.LoadingManager();
+    manager.setURLModifier(url => {
+      const normalized = decodeURIComponent(url).replaceAll('\\', '/');
+      if (normalized === 'droneA.bin' || normalized.endsWith('/droneA.bin')) return droneABinUrl;
+      if (normalized.endsWith('/textures/Image_1.ktx2')) return droneImage1Url;
+      if (normalized.endsWith('/textures/Image_2.ktx2')) return droneImage2Url;
+      if (normalized.endsWith('/textures/drone_texture.ktx2')) return droneTextureUrl;
+      if (normalized.endsWith('/Image_1.png')) return droneImage1PngUrl;
+      if (normalized.endsWith('/Image_2.png')) return droneImage2PngUrl;
+      if (normalized.endsWith('/drone_texture.png')) return droneTexturePngUrl;
+      return url;
+    });
+    const loader = this.createGLTFLoader(manager);
+    const gltf = await loader.loadAsync(droneAUrl);
+    this._models.set(DRONE_A_MODEL, {
+      template: gltf.scene,
+      colliderParts: [],
+      materialStyle: 'drone',
+      shadowCasterNames: [],
+    });
+    console.info('[models] DroneA loaded.');
+  }
+
   /**
    * Make a new copy of a preloaded model (unique materials, shared geometry).
    * @param {string} name
@@ -260,14 +296,32 @@ export class ModelLoader {
     }
 
     const root = entry.template.clone(true);
+    // GLTF cloning keeps material references shared inside the clone. Preserve
+    // that sharing for DroneA so its model-authored material values stay intact,
+    // but retain the existing preparation behavior for other model types.
+    const materialCopies = entry.materialStyle === 'drone' ? new Map() : null;
+    const shadowCasterNames = entry.shadowCasterNames ?? [];
     root.traverse((child) => {
       if (!child.isMesh) return;
-      child.castShadow = entry.shadowCasterNames.includes(child.userData.name ?? child.name);
+      if (child.name === 'Camera' || child.userData?.name === 'Camera') {
+        // Hide only a renderable mesh named Camera; an actual GLTF camera is not a mesh
+        // and therefore never reaches this branch.
+        child.visible = false;
+      }
+      child.castShadow = shadowCasterNames.includes(child.userData.name ?? child.name);
       // GLTFLoader sanitizes spaces in .name; userData.name retains the authored name.
       if (!child.material) return;
+      const prepare = (mat) => {
+        if (!mat) return mat;
+        if (!materialCopies) return this._prepareMaterial(mat, entry.materialStyle);
+        if (!materialCopies.has(mat)) {
+          materialCopies.set(mat, this._prepareMaterial(mat, entry.materialStyle));
+        }
+        return materialCopies.get(mat);
+      };
       child.material = Array.isArray(child.material)
-        ? child.material.map((mat) => this._prepareMaterial(mat, entry.materialStyle))
-        : this._prepareMaterial(child.material, entry.materialStyle);
+        ? child.material.map(prepare)
+        : prepare(child.material);
     });
 
     return { root, colliderParts: entry.colliderParts };

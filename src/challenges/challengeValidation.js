@@ -132,6 +132,43 @@ function hasCalledFunctionDeclaration(tokens) {
   )));
 }
 
+function hasCall(tokens, name) {
+  return tokens.some((token, index) => token.text === name && tokens[index + 1]?.text === '(');
+}
+
+function hasCallWithFalse(tokens, name) {
+  return tokens.some((token, index) => token.text === name
+    && tokens[index + 1]?.text === '('
+    && tokens[index + 2]?.text === 'false');
+}
+
+function hasArrayDrivenCubeColor(tokens) {
+  const arrays = new Set();
+  const aliases = new Set();
+  for (let i = 0; i < tokens.length; i++) {
+    if (!['let', 'const', 'var'].includes(tokens[i].text)) continue;
+    const name = tokens[i + 1]?.text;
+    if (!/^[A-Za-z_$][\w$]*$/.test(name || '') || tokens[i + 2]?.text !== '=') continue;
+    if (arrays.has(tokens[i + 3]?.text) && tokens[i + 4]?.text === '['
+      && matchingToken(tokens, i + 4, '[', ']') >= 0) { aliases.add(name); continue; }
+    if (tokens[i + 3]?.text !== '[') continue;
+    const end = matchingToken(tokens, i + 3, '[', ']');
+    const values = end < 0 ? [] : tokens.slice(i + 4, end).filter(token => token.text !== ',');
+    if (values.length > 0 && values.every(token => token.type === 'string')) arrays.add(name);
+  }
+  for (let i = 0; i < tokens.length; i++) {
+    if (tokens[i].text !== 'createCube' || tokens[i + 1]?.text !== '(' || tokens[i + 2]?.text !== '{') continue;
+    const end = matchingToken(tokens, i + 2, '{', '}');
+    for (let j = i + 3; j < end; j++) {
+      if (tokens[j].text !== 'color' || tokens[j + 1]?.text !== ':') continue;
+      if (arrays.has(tokens[j + 2]?.text) && tokens[j + 3]?.text === '['
+        && matchingToken(tokens, j + 3, '[', ']') >= 0) return true;
+      if (aliases.has(tokens[j + 2]?.text)) return true;
+    }
+  }
+  return false;
+}
+
 export function createChallengeValidator(challenge, source, { isCurrent, onComplete }) {
   const parsed = scan(source);
   const kind = challenge.validation;
@@ -144,24 +181,47 @@ export function createChallengeValidator(challenge, source, { isCurrent, onCompl
   const syntax = conditional
     || (kind === 'for' && hasForStatement(parsed.tokens))
     || (kind === 'functionCall' && hasCalledFunctionDeclaration(parsed.tokens));
+  const sourceRequirements = kind === 'yellowDoorUnlock'
+    ? /\bfindDoorYellow\s*\(/.test(source) && /\blockDoor\s*\(\s*false\s*\)/.test(source)
+    : kind === 'greenDoorCollision'
+      ? /\bfindDoorGreen\s*\(/.test(source)
+        && /\bfindKeyGreen\s*\(/.test(source)
+        && /\bfindPlayer\s*\(/.test(source)
+        && /\bonCollision\s*\(/.test(source)
+        && /\blockDoor\s*\(\s*false\s*\)/.test(source)
+        && /\bif\s*\(/.test(source)
+        && /===/.test(source)
+      : kind === 'arrayCubeColor'
+        ? hasArrayDrivenCubeColor(parsed.tokens)
+      : true;
   let complete = false;
   let observed = false;
+  const observedCalls = new Map();
   let executedSuccessfully = false;
   const satisfy = () => {
-    if (complete || !executedSuccessfully || !isCurrent()) return;
+    const stageRequirement = kind === 'yellowDoorUnlock'
+      ? observedCalls.has('findDoorYellow') && observedCalls.get('lockDoor') === false
+      : kind === 'greenDoorCollision'
+        ? ['findDoorGreen', 'findKeyGreen', 'findPlayer', 'onCollision'].every(name => observedCalls.has(name))
+        : kind === 'arrayCubeColor'
+          ? observedCalls.has('createCube')
+        : true;
+    if (complete || !executedSuccessfully || !isCurrent() || !sourceRequirements || !stageRequirement) return;
     complete = true;
     onComplete();
   };
   return {
     get complete() { return complete; },
     observe(name, value) {
+      observedCalls.set(name, value);
       if (kind === name || (name === 'print' && variable && typeof value === kind
         && (kind !== 'number' || Number.isFinite(value)))) observed = true;
       satisfy();
     },
     succeeded() {
       executedSuccessfully = true;
-      if (syntax || (kind === 'comment' && parsed.comment) || observed) satisfy();
+      if (syntax || (kind === 'comment' && parsed.comment) || observed
+        || kind === 'yellowDoorUnlock' || kind === 'greenDoorCollision' || kind === 'arrayCubeColor') satisfy();
     },
   };
 }

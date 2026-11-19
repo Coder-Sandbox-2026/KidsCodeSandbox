@@ -185,18 +185,18 @@ declare function createLightCone(options?: LightShapeOptions): LightGameObject |
 declare function createLightCylinder(options?: LightShapeOptions): LightGameObject | null;
 declare function createPlane(options?: ShapeOptions): GameObject;
 declare function createGoldCoin(options?: ShapeOptions): GoldCoin;
-declare function getKeyRed(): RedKey | null;
-declare function getKeyGreen(): GreenKey | null;
-declare function getKeyYellow(): YellowKey | null;
-declare function getKeyBlue(): BlueKey | null;
+declare function findKeyRed(): RedKey | null;
+declare function findKeyGreen(): GreenKey | null;
+declare function findKeyYellow(): YellowKey | null;
+declare function findKeyBlue(): BlueKey | null;
 ${DEBUG_GOLD_STAR_ENABLED ? `/** Development only: a gold star with pulsing glow and glitter. Collision defaults on; physics defaults off. */
 declare function createGoldStar(options?: ShapeOptions): GoldStar;` : ''}
 declare function createCake(options?: ShapeOptions): GameObject;
 /** Gets the red door in this level, or null if there isn't one. */
-declare function getDoorRed(): Door | null;
-declare function getDoorGreen(): Door | null;
-declare function getDoorYellow(): Door | null;
-declare function getDoorBlue(): Door | null;
+declare function findDoorRed(): Door | null;
+declare function findDoorGreen(): Door | null;
+declare function findDoorYellow(): Door | null;
+declare function findDoorBlue(): Door | null;
 
 interface ExplosionOptions {
   /** World position, like [0, 2, -8]. Skip this to play in front of you. */
@@ -223,7 +223,7 @@ declare function random(min?: number, max?: number): number;
 declare function distance(a: GameObject | Vec3, b: GameObject | Vec3): number;
 declare function destroy(object: GameObject): void;
 declare function findObject(name: string): GameObject | null;
-declare function getPlayer(): Player;
+declare function findPlayer(): Player;
 declare function getPlayerPosition(): [number, number, number];
 declare function setPlayerPosition(position: [number, number, number]): void;
 declare function getPlayerDirection(): [number, number, number];

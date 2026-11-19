@@ -33,7 +33,7 @@ test('door interaction only targets closed doors and uses P', () => {
     getPlayerDirection: () => [0, 0, -1],
   };
   const system = new InteractionSystem({
-    getPlayer: () => player,
+    findPlayer: () => player,
     isActive: () => true,
     promptHost: fakeElement(),
   });

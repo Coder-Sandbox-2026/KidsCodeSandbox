@@ -59,7 +59,7 @@ test('Red Key placeholder replacement does not skip adjacent COL_ geometry', () 
 });
 
 test('colored keys register independently and expose collision callbacks', () => {
-  const engine = { userMeshes: [], getPlayer: () => null };
+  const engine = { userMeshes: [], findPlayer: () => null };
   for (const color of ['red', 'green', 'yellow', 'blue']) {
     const mesh = new THREE.Group();
     mesh.name = `key${color}`;

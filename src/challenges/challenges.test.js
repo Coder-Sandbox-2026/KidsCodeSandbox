@@ -6,7 +6,6 @@ import { createChallengeValidator } from './challengeValidation.js';
 import { mountChallengeUI } from './ChallengeUI.js';
 import { CHALLENGE_LEVEL_CONFIG } from './challengeLevelConfig.js';
 import { selectChallengeLevel } from './challengeSelection.js';
-import { MAX_ACCESSIBLE_LEVEL } from '../config/levelAccess.js';
 
 test('validation rejects wrong concepts, quoted comments, literals and stale runs', () => {
   const check = (id, source, name, value, current = true) => {
@@ -30,9 +29,26 @@ test('validation rejects wrong concepts, quoted comments, literals and stale run
   assert.equal(check(5, 'const hero = "Ace"; print(hero);', 'print', 'Ace'), 1);
   assert.equal(check(2, '', 'print', 'hello'), 0);
   assert.equal(check(6, '', 'createSphere'), 0);
-  assert.equal(check(11, '', 'getPlayer'), 0);
+  assert.equal(check(11, '', 'findPlayer'), 0);
   assert.equal(check(11, '', 'setJumpForce', 15), 1);
   assert.equal(check(1, '', 'print', 'late', false), 0);
+});
+
+test('Challenge 18 validates an array-derived cube color relationship', () => {
+  const challenge = CHALLENGES[17];
+  const check = (source, expected) => {
+    let completed = 0;
+    const validator = createChallengeValidator(challenge, source, {
+      isCurrent: () => true, onComplete: () => completed++,
+    });
+    validator.observe('createCube');
+    validator.succeeded();
+    assert.equal(completed, expected, source);
+  };
+  check('let colors = ["red", "green", "blue"]; createCube({ color: colors[2] });', 1);
+  check('const myColors = ["yellow", "purple"]; let selectedColor = myColors[1]; createCube({ color: selectedColor });', 1);
+  check('let colors = ["red", "green", "blue"]; createCube({ color: "blue" });', 0);
+  check('let colors = ["red", "green"]; createCube();', 0);
 });
 
 test('Level 12 and 13 validate conditional syntax after successful execution', () => {
@@ -126,7 +142,7 @@ test('current briefing, answer, next/reset/clear, and final catalog boundary', a
     onAdvance(level) { assert.equal(code, ''); selected = level; resets++; },
   });
   const [feedback, overlay] = viewport.children;
-  for (let i = 0; i < MAX_ACCESSIBLE_LEVEL; i++) {
+  for (let i = 0; i < CHALLENGES.length; i++) {
     assert.equal(ui.currentChallenge, CHALLENGES[i]);
     assert.ok(CHALLENGES[i].title.startsWith('Challenge ' + (i + 1) + ' \u2014 '));
     assert.equal(overlay.querySelector('h2').textContent, CHALLENGES[i].title);
@@ -134,7 +150,7 @@ test('current briefing, answer, next/reset/clear, and final catalog boundary', a
     assert.equal(overlay.querySelector('#challenge-briefing-help').querySelector('p').textContent, CHALLENGES[i].help);
     overlay.querySelector('[data-action="answer"]').click();
     assert.equal(code, CHALLENGES[i].example);
-    assert.equal(ui.hasNextChallenge(), i + 1 < MAX_ACCESSIBLE_LEVEL);
+    assert.equal(ui.hasNextChallenge(), i + 1 < CHALLENGES.length);
     if (ui.hasNextChallenge()) {
       ui.setComplete(true);
       assert.equal(await ui.nextChallenge(), true);
@@ -145,7 +161,7 @@ test('current briefing, answer, next/reset/clear, and final catalog boundary', a
     }
   }
   assert.equal(await ui.nextChallenge(), false);
-  assert.equal(resets, MAX_ACCESSIBLE_LEVEL - 1);
+  assert.equal(resets, CHALLENGES.length - 1);
   assert.equal(Object.isFrozen(CHALLENGES), true);
   assert.equal(CHALLENGES.every(Object.isFrozen), true);
 });
@@ -180,20 +196,28 @@ test('dropdown jumps and Next share selected stage, objective, UI and reward con
   await ui.nextChallenge(); verify(13);
   await ui.nextChallenge(); verify(14);
   await ui.nextChallenge(); verify(15);
-  assert.equal(await ui.nextChallenge(), false);
-  assert.equal(ui.hasNextChallenge(), false);
+  assert.equal(await ui.nextChallenge(), true);
+  verify(16);
+  assert.equal(ui.hasNextChallenge(), true);
   assert.equal(select(12), true);
   verify(12);
   assert.equal(select(14), true);
   verify(14);
   assert.equal(select(15), true);
   verify(15);
-  assert.equal(select(16), false);
+  assert.equal(select(16), true);
+  verify(16);
+  assert.equal(select(17), true);
+  verify(17);
+  assert.equal(select(18), true);
+  verify(18);
+  assert.equal(await ui.nextChallenge(), false);
+  assert.equal(ui.hasNextChallenge(), false);
   assert.deepEqual(CHALLENGE_LEVEL_CONFIG[6].goldStar, { position: [-0.4, 8.3, -37.6], scale: 0.6 });
   assert.deepEqual(CHALLENGE_LEVEL_CONFIG[7].goldStar, { position: [35, 2, 42.7], scale: 0.2 });
   assert.deepEqual(CHALLENGE_LEVEL_CONFIG[8].playerPosition, [30.973, 17.950, 24.599]);
   assert.deepEqual(CHALLENGE_LEVEL_CONFIG[8].playerDirection, [-0.999, 0, 0.050]);
-  assert.equal(Object.keys(CHALLENGE_LEVEL_CONFIG).length, 15);
+  assert.equal(Object.keys(CHALLENGE_LEVEL_CONFIG).length, 18);
   assert.equal(CHALLENGES[10].validation, 'setJumpForce');
   assert.deepEqual(CHALLENGE_LEVEL_CONFIG[10].playerPosition, [44.661, 22.250, -15.425]);
   assert.deepEqual(CHALLENGE_LEVEL_CONFIG[10].playerDirection, [0.078, 0, 0.997]);
@@ -217,6 +241,9 @@ test('dropdown jumps and Next share selected stage, objective, UI and reward con
   assert.deepEqual(CHALLENGE_LEVEL_CONFIG[1].playerPosition, [-22.520, 2.700, -18.584]);
   assert.deepEqual(CHALLENGE_LEVEL_CONFIG[1].playerDirection, [-0.589, 0, 0.808]);
   assert.deepEqual(CHALLENGE_LEVEL_CONFIG[1].goldStar, { position: [23.7, 6, -20.4], scale: 0.2 });
+  assert.deepEqual(CHALLENGE_LEVEL_CONFIG[16].goldStar, { position: [0, 2.5, -21], scale: 0.2 });
+  assert.deepEqual(CHALLENGE_LEVEL_CONFIG[17].goldStar, { position: [10, 3.0, 0.0], scale: 0.2 });
+  assert.deepEqual(CHALLENGE_LEVEL_CONFIG[18].goldStar, { position: [-40, 2.5, -42], scale: 0.2 });
   const html = await readFile(new URL('../../index.html', import.meta.url), 'utf8');
   assert.equal(CHALLENGES[11].validation, 'heightIf');
   assert.equal(CHALLENGES[12].validation, 'temperatureIfElse');

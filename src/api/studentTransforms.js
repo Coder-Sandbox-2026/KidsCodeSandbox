@@ -13,8 +13,14 @@ export function studentCreationOptions(options) {
 }
 
 const views = new WeakMap();
-export function studentObject(object) {
+const viewObservers = new WeakMap();
+export function studentObject(object, onCall = null) {
   if (!object) return object;
+  if (onCall) {
+    const observers = viewObservers.get(object) ?? new Set();
+    observers.add(onCall);
+    viewObservers.set(object, observers);
+  }
   if (views.has(object)) return views.get(object);
   const vectors = new Map();
   const methods = new Map();
@@ -72,6 +78,7 @@ export function studentObject(object) {
       });
       if (key === 'onCollision') return method(key, callback => {
         if (typeof callback !== 'function') throw new TypeError('onCollision() expects a function');
+        for (const observer of viewObservers.get(target) ?? []) observer('onCollision');
         target.onCollision(other => callback(other?.mesh ? studentObject(other) : other));
         return view;
       });

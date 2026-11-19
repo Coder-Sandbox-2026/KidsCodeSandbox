@@ -34,7 +34,7 @@ test('student transform units and coin lifecycle use real API and physics', asyn
     models: { has: () => true, clone: () => ({ root: new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial()) }) } };
   engine.player = new Player(new THREE.PerspectiveCamera(), physics);
   engine.player.engine = engine;
-  engine.getPlayer = () => engine.player;
+  engine.findPlayer = () => engine.player;
   const api = Object.assign(Object.create(GameAPI.prototype), { engine, _objects: [],
     shapes: createShapeFactories(engine), models: createModelFactories(engine), _createConsole: () => ({}) });
   const run = new RunLifecycle().begin(), scope = api.buildScope(run);
@@ -181,10 +181,10 @@ test('music is looping, idempotent across Run/Reset calls, and stopped by Stop',
     instances.push(sound); return sound;
   });
   audio.playMusic(); const music = instances[0];
-  assert.equal(music.loop, true); assert.equal(music.volume, 0.2);
+  assert.equal(music.loop, true); assert.equal(music.volume, 0.14);
   music.currentTime = 12; audio.playMusic(); audio.playMusic();
-  audio.setMusicVolume(0.5); assert.equal(music.volume, 0.5);
-  audio.setMusicVolume(0.2); assert.equal(music.volume, 0.2);
+  audio.setMusicVolume(0.5); assert.equal(music.volume, 0.35);
+  audio.setMusicVolume(0.2); assert.equal(music.volume, 0.14);
   assert.equal(music.currentTime, 12); assert.equal(music.plays, 1); assert.equal(instances.length, 1);
   audio.stopMusic(); assert.equal(music.currentTime, 0); assert.equal(music.paused, true);
 });
@@ -202,6 +202,35 @@ test('level music switches to Frozen from Level 12 onward', () => {
   assert.equal(instances.length, 2);
   assert.equal(instances[0].url, audio.tracks.Track01);
   assert.equal(instances[1].url, audio.tracks.Frozen);
+});
+
+test('caught audio attenuation is temporary and applies the DroneA multiplier', () => {
+  const instances = [];
+  const audio = new AudioManager(url => {
+    const sound = { url, currentTime: 0, volume: 0, play() { return Promise.resolve(); }, pause() {} };
+    instances.push(sound); return sound;
+  });
+  audio.playMusic();
+  const music = instances[0];
+  const root = new THREE.Group();
+  root.position.set(1, 0, 0);
+  root.updateMatrixWorld(true);
+  const record = {
+    root,
+    config: { droneAudioEnabled: true, droneAudioVolume: 0.6, droneAudioMaxDistance: 15 },
+    audible: false,
+    isCaught: () => true,
+    isInjured: () => false,
+  };
+
+  audio.beginCaughtAudio({ caughtMusicVolumeMultiplier: 0.2, caughtDroneAudioMultiplier: 0.5, caughtAudioFadeDuration: 0.3 });
+  audio.update(0.3);
+  assert.equal(music.volume, 0.028);
+  assert.equal(audio._droneTargetGain(record, new THREE.Vector3(), null, 1), 0.3);
+
+  audio.endCaughtAudio();
+  audio.update(0.3);
+  assert.equal(music.volume, 0.14);
 });
 
 test('explosion start plays charging immediately and later events do not replay it', async () => {

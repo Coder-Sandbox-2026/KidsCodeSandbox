@@ -1,7 +1,7 @@
 export default `// ⭐ Collect a Coin
 // Walk into the gold coin. It knows you are the player!
 
-const player = getPlayer();
+const player = findPlayer();
 console.log("Is this the player?", player.isPlayer());
 
 player.setSettings({

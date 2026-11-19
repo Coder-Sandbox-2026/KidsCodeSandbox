@@ -1,7 +1,7 @@
 export default `// 🎂 Collect a Cake
 // Walk into the cake. It knows you are the player!
 
-const player = getPlayer();
+const player = findPlayer();
 console.log("Is this the player?", player.isPlayer());
 
 player.setSettings({

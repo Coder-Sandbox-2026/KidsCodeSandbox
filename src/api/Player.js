@@ -196,6 +196,26 @@ export class Player extends Actor {
     this._position.set(newPos.x, newPos.y, newPos.z);
   }
 
+  /** Engine-only movement path for controlled kinematic pushes such as DroneA. */
+  applyExternalMovement(delta, options = {}) {
+    const corrected = this.movementController.applyExternalMovement(delta, options);
+    this._syncExternalMovementTransform();
+    return corrected;
+  }
+
+  /** Engine-only commit for a movement that was already queried safely. */
+  commitExternalMovement(delta) {
+    const corrected = this.movementController.commitExternalMovement(delta);
+    this._syncExternalMovementTransform();
+    return corrected;
+  }
+
+  _syncExternalMovementTransform() {
+    const position = this.body.translation();
+    this._position.set(position.x, position.y, position.z);
+    this.cameraController.applyToActor(position);
+  }
+
   consumeCharacterCollisionStarts() {
     return this.movementController.consumeNewContactHandles();
   }

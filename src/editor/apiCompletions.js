@@ -8,8 +8,8 @@
  *   high   — most complete useful scaffold for that API
  *
  * These are API templates, not full-statement snippets.
- * "const player = getPlayer();" is a statement snippet and must not
- * be used as the normal getPlayer completion.
+ * "const player = findPlayer();" is a statement snippet and must not
+ * be used as the normal findPlayer completion.
  *
  * Methods that take an optional object-literal also set `options` so hover
  * can show a collapsed summary plus "See all options".
@@ -104,24 +104,24 @@ export const PLAYER_SETTING_OPTIONS = [
 /** Global API completions */
 export const API_DOCS = [
   ...['Green', 'Yellow', 'Blue'].map(color => ({
-    label: `getDoor${color}`, kind: 'Function', detail: `Get the ${color.toLowerCase()} door, if there is one`,
-    doc: `getDoor${color}()\n\nGets the ${color.toLowerCase()} door in this level, or null if there isn't one.`,
-    completion: call(`getDoor${color}`, `getDoor${color}()`),
+    label: `findDoor${color}`, kind: 'Function', detail: `Find the ${color.toLowerCase()} door, if there is one`,
+    doc: `findDoor${color}()\n\nFinds the ${color.toLowerCase()} door in this level, or null if there isn't one.`,
+    completion: call(`findDoor${color}`, `findDoor${color}()`),
   })),
   {
-    label: 'getDoorRed', kind: 'Function', detail: 'Get the red door, if there is one',
-    doc: "getDoorRed()\n\nGets the red door in this level, or null if there isn't one.",
-    completion: call('getDoorRed', 'getDoorRed()'),
+    label: 'findDoorRed', kind: 'Function', detail: 'Find the red door, if there is one',
+    doc: "findDoorRed()\n\nFinds the red door in this level, or null if there isn't one.",
+    completion: call('findDoorRed', 'findDoorRed()'),
   },
   ...['Green', 'Yellow', 'Blue'].map(color => ({
-    label: `getKey${color}`, kind: 'Function', detail: `Get the ${color.toLowerCase()} key, if there is one`,
-    doc: `getKey${color}()\n\nGets the ${color.toLowerCase()} key in this level, or null if there isn't one.\nUse key.onCollision(callback) to run code when the player touches it.`,
-    completion: call(`getKey${color}`, `getKey${color}()`),
+    label: `findKey${color}`, kind: 'Function', detail: `Find the ${color.toLowerCase()} key, if there is one`,
+    doc: `findKey${color}()\n\nFinds the ${color.toLowerCase()} key in this level, or null if there isn't one.\nUse key.onCollision(callback) to run code when the player touches it.`,
+    completion: call(`findKey${color}`, `findKey${color}()`),
   })),
   {
-    label: 'getKeyRed', kind: 'Function', detail: 'Get the red key, if there is one',
-    doc: "getKeyRed()\n\nGets the first Red Key in this level, or null if there isn't one.\nUse key.onCollision(callback) to run code when the player touches it.",
-    completion: call('getKeyRed', 'getKeyRed()'),
+    label: 'findKeyRed', kind: 'Function', detail: 'Find the red key, if there is one',
+    doc: "findKeyRed()\n\nFinds the first Red Key in this level, or null if there isn't one.\nUse key.onCollision(callback) to run code when the player touches it.",
+    completion: call('findKeyRed', 'findKeyRed()'),
   },
   {
     label: 'getPlayerPosition', kind: 'Function', detail: 'Get where you are',
@@ -339,11 +339,11 @@ export const API_DOCS = [
     completion: call('findObject', 'findObject("${1:name}")'),
   },
   {
-    label: 'getPlayer',
+    label: 'findPlayer',
     kind: 'Function',
     detail: 'Get the player you control',
-    doc: 'getPlayer()\n\nReturns the player character (the person you walk around as).\nUse this to change walk speed, jump, or check if you are on the ground.\n\nExample:\nconst player = getPlayer();\nplayer.setWalkSpeed(8);\nif (player.isGrounded()) {\n  print("Standing!");\n}',
-    completion: call('getPlayer', 'getPlayer()'),
+    doc: 'findPlayer()\n\nFinds the player character (the person you walk around as).\nUse this to change walk speed, jump, or check if you are on the ground.\n\nExample:\nconst player = findPlayer();\nplayer.setWalkSpeed(8);\nif (player.isGrounded()) {\n  print("Standing!");\n}',
+    completion: call('findPlayer', 'findPlayer()'),
   },
   {
     label: 'isKeyDown',
@@ -486,11 +486,11 @@ export const MEMBER_DOCS = [
 
 /** Shown after player. */
 export const PLAYER_DOCS = [
-  { label: 'isPlayer', kind: 'Method', detail: 'True — this is the player', doc: 'player.isPlayer()\n\nReturns true only for the player you control.\n\nExample:\nconst player = getPlayer();\nconsole.log(player.isPlayer());', completion: call('isPlayer', 'isPlayer()') },
+  { label: 'isPlayer', kind: 'Method', detail: 'True — this is the player', doc: 'player.isPlayer()\n\nReturns true only for the player you control.\n\nExample:\nconst player = findPlayer();\nconsole.log(player.isPlayer());', completion: call('isPlayer', 'isPlayer()') },
   { label: 'isGrounded', kind: 'Method', detail: 'True if standing on the ground', doc: 'player.isGrounded()\n\nReturns true when the player is standing on the ground\nor a platform.\n\nExample:\nif (player.isGrounded()) {\n  print("You are standing on the ground!");\n}', completion: call('isGrounded', 'isGrounded()') },
   { label: 'position', kind: 'Property', detail: 'Player position (x, y, z)', completion: ident('position') },
   { label: 'name', kind: 'Property', detail: 'Player name', completion: ident('name') },
-  { label: 'onCollision', kind: 'Method', detail: 'Run code when the player starts touching something', doc: 'player.onCollision(callback)\n\nRuns once when the player starts touching an object.\n\nExample:\ngetPlayer().onCollision((other) => {\n  if (other) print("Bumped into something!");\n});', completion: call('onCollision', 'onCollision((${1:other}) => {\n\t${0}\n})') },
+  { label: 'onCollision', kind: 'Method', detail: 'Run code when the player starts touching something', doc: 'player.onCollision(callback)\n\nRuns once when the player starts touching an object.\n\nExample:\nfindPlayer().onCollision((other) => {\n  if (other) print("Bumped into something!");\n});', completion: call('onCollision', 'onCollision((${1:other}) => {\n\t${0}\n})') },
   { label: 'setWalkSpeed', kind: 'Method', detail: 'How fast the player walks', doc: 'player.setWalkSpeed(speed)\n\nChanges how fast the player walks.\n\nspeed — Walking speed. Must be 0 or greater.\n\nExample:\nplayer.setWalkSpeed(8);', completion: call('setWalkSpeed', 'setWalkSpeed(${1:8})') },
   { label: 'getWalkSpeed', kind: 'Method', detail: 'Read the walk speed', doc: 'player.getWalkSpeed()\n\nReturns the current walk speed.\n\nExample:\nconsole.log(player.getWalkSpeed());', completion: call('getWalkSpeed', 'getWalkSpeed()') },
   { label: 'setJumpForce', kind: 'Method', detail: 'How high the player jumps', doc: 'player.setJumpForce(force)\n\nChanges how strong the jump is.\n\nforce — Jump power. Must be 0 or greater.\n\nExample:\nplayer.setJumpForce(12);', completion: call('setJumpForce', 'setJumpForce(${1:12})') },

@@ -29,22 +29,22 @@ function disclosure(contents) {
   return contents.find((part) => part.supportHtml && !part.value.startsWith('<strong>')) || null;
 }
 
-const getPlayer = findCompletion('getPlayer');
+const findPlayer = findCompletion('findPlayer');
 const createCube = findCompletion('createCube');
 const printFn = findCompletion('print');
 
 test('a method without an optional object literal keeps the simple hover', () => {
-  assert.equal(hasOptionalObjectLiteral(getPlayer), false);
-  const contents = buildHoverContents(getPlayer);
+  assert.equal(hasOptionalObjectLiteral(findPlayer), false);
+  const contents = buildHoverContents(findPlayer);
   const text = simpleText(contents);
 
   assert.equal(contents.length, 2);
   assert.equal(disclosure(contents), null);
-  assert.match(contents[0].value, /color: #f9e2af;.*getPlayer/);
+  assert.match(contents[0].value, /color: #f9e2af;.*findPlayer/);
   assert.match(text, /```/);
-  assert.match(text, /getPlayer\(\)/);
+  assert.match(text, /findPlayer\(\)/);
   assert.doesNotMatch(text, new RegExp(SEE_ALL_OPTIONS_LABEL));
-  assert.deepEqual(contents, buildHoverContents(getPlayer, { expanded: true }));
+  assert.deepEqual(contents, buildHoverContents(findPlayer, { expanded: true }));
 });
 
 test('a method with an optional object literal advertises extra options', () => {

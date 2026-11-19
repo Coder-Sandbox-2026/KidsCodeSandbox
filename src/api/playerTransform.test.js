@@ -36,7 +36,7 @@ test('player transform APIs synchronize physics and first-person view safely', a
     else globalThis.document = savedDocument;
   });
   const api = Object.assign(Object.create(GameAPI.prototype), {
-    engine: { player, getPlayer: () => player }, shapes: {}, models: {},
+    engine: { player, findPlayer: () => player }, shapes: {}, models: {},
     _consoleFn() {}, _groupDepth: 0,
   });
   const scope = api.buildScope(new RunLifecycle().begin());

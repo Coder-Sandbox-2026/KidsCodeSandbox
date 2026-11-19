@@ -34,7 +34,7 @@ function assignedExpression(name, source) {
 
 function isKeyExpression(expression, source, seen = new Set()) {
   const value = String(expression ?? '').trim().replace(/;$/, '').trim();
-  if (/^(?:getKey(?:Red|Green|Yellow|Blue)|key(?:Red|Green|Yellow|Blue))\s*\(\s*\)\s*(?:\?\.)?$/.test(value)) return true;
+  if (/^(?:findKey(?:Red|Green|Yellow|Blue)|key(?:Red|Green|Yellow|Blue))\s*\(\s*\)\s*(?:\?\.)?$/.test(value)) return true;
   if (!/^[A-Za-z_$][\w$]*$/.test(value) || seen.has(value)) return false;
   seen.add(value);
   return isKeyExpression(assignedExpression(value, source, seen), source, seen);
@@ -43,7 +43,7 @@ function isKeyExpression(expression, source, seen = new Set()) {
 /** Return the member catalog for a receiver immediately before its dot. */
 export function memberDocsForSource(source) {
   const text = String(source ?? '');
-  if (/(?:getKey(?:Red|Green|Yellow|Blue)|key(?:Red|Green|Yellow|Blue))\s*\(\s*\)\s*\?\.\s*$/.test(text)) return RED_KEY_MEMBER_DOCS;
+  if (/(?:findKey(?:Red|Green|Yellow|Blue)|key(?:Red|Green|Yellow|Blue))\s*\(\s*\)\s*\?\.\s*$/.test(text)) return RED_KEY_MEMBER_DOCS;
   const owner = text.match(/(?:^|[^\w$])([A-Za-z_$][\w$]*)\s*\.\s*$/)?.[1];
   if (!owner) return null;
   return isKeyExpression(assignedExpression(owner, text), text)
@@ -166,8 +166,8 @@ export function registerAutocomplete(monaco, { getPlayerPosition } = {}) {
           const assignments = [...context.masked.matchAll(/\b(?:const|let|var)\s+([\w$]+)\s*=\s*([\w$]+)\s*\(/g)];
           const factory = assignments.filter(match => match[1] === owner).at(-1)?.[2];
           const entry = API_DOCS.find(item => item.label === factory);
-          if (entry?.label === 'getPlayer') docs = PLAYER_DOCS;
-          else if (entry?.label?.match(/^getDoor(Red|Green|Yellow|Blue)$/)) docs = MEMBER_DOCS.filter(item => item.label === 'lockDoor');
+          if (entry?.label === 'findPlayer') docs = PLAYER_DOCS;
+          else if (entry?.label?.match(/^findDoor(Red|Green|Yellow|Blue)$/)) docs = MEMBER_DOCS.filter(item => item.label === 'lockDoor');
           else if (entry && (entry.label.startsWith('create') || entry.label === 'findObject')) docs = MEMBER_DOCS;
         }
         return { incomplete: true, suggestions: (docs || []).filter(item => matches(item.label))

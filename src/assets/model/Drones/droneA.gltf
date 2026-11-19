@@ -1,0 +1,466 @@
+{
+  "asset": {
+    "generator": "Khronos glTF Blender I/O v5.0.21",
+    "version": "2.0"
+  },
+  "extensionsUsed": [
+    "KHR_materials_emissive_strength",
+    "KHR_texture_basisu"
+  ],
+  "scene": 0,
+  "scenes": [
+    {
+      "name": "Scene",
+      "nodes": [
+        3
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "extras": {
+        "castShadow": false,
+        "receiveShadow": false,
+        "shadowMode": "REAL"
+      },
+      "mesh": 0,
+      "name": "drone-camera"
+    },
+    {
+      "extras": {
+        "castShadow": true,
+        "receiveShadow": false,
+        "shadowMode": "REAL"
+      },
+      "mesh": 1,
+      "name": "DroneBody"
+    },
+    {
+      "children": [
+        0,
+        1
+      ],
+      "extras": {
+        "castShadow": true,
+        "receiveShadow": false,
+        "shadowMode": "REAL"
+      },
+      "name": "Drone.obj.cleaner.materialmerger.gles"
+    },
+    {
+      "children": [
+        2
+      ],
+      "extras": {
+        "castShadow": true,
+        "receiveShadow": false,
+        "shadowMode": "REAL"
+      },
+      "name": "Sketchfab_model"
+    }
+  ],
+  "materials": [
+    {
+      "doubleSided": true,
+      "name": "lambert1",
+      "normalTexture": {
+        "index": 0
+      },
+      "occlusionTexture": {
+        "index": 1
+      },
+      "pbrMetallicRoughness": {
+        "baseColorTexture": {
+          "index": 2
+        },
+        "metallicFactor": 0,
+        "metallicRoughnessTexture": {
+          "index": 1
+        },
+        "roughnessFactor": 0.6837722063064575
+      }
+    },
+    {
+      "doubleSided": true,
+      "emissiveFactor": [
+        1,
+        1,
+        1
+      ],
+      "emissiveTexture": {
+        "index": 3
+      },
+      "extensions": {
+        "KHR_materials_emissive_strength": {
+          "emissiveStrength": 5
+        }
+      },
+      "name": "Glow",
+      "pbrMetallicRoughness": {
+        "baseColorTexture": {
+          "index": 4
+        },
+        "metallicFactor": 0,
+        "roughnessFactor": 0.5
+      }
+    }
+  ],
+  "meshes": [
+    {
+      "name": "Object_0.001",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0,
+            "NORMAL": 1,
+            "TEXCOORD_0": 2
+          },
+          "indices": 3,
+          "material": 0
+        },
+        {
+          "attributes": {
+            "POSITION": 4,
+            "NORMAL": 5,
+            "TEXCOORD_0": 6
+          },
+          "indices": 7,
+          "material": 1
+        }
+      ]
+    },
+    {
+      "name": "Object_0",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 8,
+            "NORMAL": 9,
+            "TEXCOORD_0": 10
+          },
+          "indices": 11,
+          "material": 0
+        },
+        {
+          "attributes": {
+            "POSITION": 12,
+            "NORMAL": 13,
+            "TEXCOORD_0": 14
+          },
+          "indices": 15,
+          "material": 1
+        }
+      ]
+    }
+  ],
+  "textures": [
+    {
+      "sampler": 0,
+      "extensions": {
+        "KHR_texture_basisu": {
+          "source": 0
+        }
+      }
+    },
+    {
+      "sampler": 0,
+      "extensions": {
+        "KHR_texture_basisu": {
+          "source": 1
+        }
+      }
+    },
+    {
+      "sampler": 0,
+      "extensions": {
+        "KHR_texture_basisu": {
+          "source": 2
+        }
+      }
+    },
+    {
+      "sampler": 0,
+      "extensions": {
+        "KHR_texture_basisu": {
+          "source": 2
+        }
+      }
+    },
+    {
+      "sampler": 0,
+      "extensions": {
+        "KHR_texture_basisu": {
+          "source": 2
+        }
+      }
+    }
+  ],
+  "images": [
+    {
+      "mimeType": "image/ktx2",
+      "name": "Image_2",
+      "uri": "textures/Image_2.ktx2"
+    },
+    {
+      "mimeType": "image/ktx2",
+      "name": "Image_1",
+      "uri": "textures/Image_1.ktx2"
+    },
+    {
+      "mimeType": "image/ktx2",
+      "name": "drone_texture",
+      "uri": "textures/drone_texture.ktx2"
+    }
+  ],
+  "accessors": [
+    {
+      "bufferView": 0,
+      "componentType": 5126,
+      "count": 321,
+      "max": [
+        0.1464865803718567,
+        0.14648646116256714,
+        0.5270917415618896
+      ],
+      "min": [
+        -0.1464868187904358,
+        -0.1464868187904358,
+        0.4785885810852051
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 1,
+      "componentType": 5126,
+      "count": 321,
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 2,
+      "componentType": 5126,
+      "count": 321,
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 3,
+      "componentType": 5123,
+      "count": 708,
+      "type": "SCALAR"
+    },
+    {
+      "bufferView": 4,
+      "componentType": 5126,
+      "count": 39,
+      "max": [
+        0.09235374629497528,
+        0.09378672391176224,
+        0.5167071223258972
+      ],
+      "min": [
+        -0.07757044583559036,
+        -0.0736553743481636,
+        0.5167071223258972
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 5,
+      "componentType": 5126,
+      "count": 39,
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 6,
+      "componentType": 5126,
+      "count": 39,
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 7,
+      "componentType": 5123,
+      "count": 108,
+      "type": "SCALAR"
+    },
+    {
+      "bufferView": 8,
+      "componentType": 5126,
+      "count": 1173,
+      "max": [
+        0.5944163799285889,
+        0.4592819809913635,
+        0.5400684475898743
+      ],
+      "min": [
+        -0.5944163799285889,
+        -0.42482027411460876,
+        -0.4649946391582489
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 9,
+      "componentType": 5126,
+      "count": 1173,
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 10,
+      "componentType": 5126,
+      "count": 1173,
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 11,
+      "componentType": 5123,
+      "count": 4164,
+      "type": "SCALAR"
+    },
+    {
+      "bufferView": 12,
+      "componentType": 5126,
+      "count": 101,
+      "max": [
+        0.41055455803871155,
+        0.41477683186531067,
+        0.2507993280887604
+      ],
+      "min": [
+        -0.41055455803871155,
+        -0.22529272735118866,
+        -0.3980427384376526
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 13,
+      "componentType": 5126,
+      "count": 101,
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 14,
+      "componentType": 5126,
+      "count": 101,
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 15,
+      "componentType": 5123,
+      "count": 312,
+      "type": "SCALAR"
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteLength": 3852,
+      "byteOffset": 0,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 3852,
+      "byteOffset": 3852,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 2568,
+      "byteOffset": 7704,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 1416,
+      "byteOffset": 10272,
+      "target": 34963
+    },
+    {
+      "buffer": 0,
+      "byteLength": 468,
+      "byteOffset": 11688,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 468,
+      "byteOffset": 12156,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 312,
+      "byteOffset": 12624,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 216,
+      "byteOffset": 12936,
+      "target": 34963
+    },
+    {
+      "buffer": 0,
+      "byteLength": 14076,
+      "byteOffset": 13152,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 14076,
+      "byteOffset": 27228,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 9384,
+      "byteOffset": 41304,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 8328,
+      "byteOffset": 50688,
+      "target": 34963
+    },
+    {
+      "buffer": 0,
+      "byteLength": 1212,
+      "byteOffset": 59016,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 1212,
+      "byteOffset": 60228,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 808,
+      "byteOffset": 61440,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 624,
+      "byteOffset": 62248,
+      "target": 34963
+    }
+  ],
+  "samplers": [
+    {
+      "magFilter": 9729,
+      "minFilter": 9987
+    }
+  ],
+  "buffers": [
+    {
+      "byteLength": 62872,
+      "uri": "droneA.bin"
+    }
+  ],
+  "extensionsRequired": [
+    "KHR_texture_basisu"
+  ]
+}

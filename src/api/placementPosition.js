@@ -2,7 +2,7 @@
 export function placementPosition(engine, explicit) {
   if (explicit !== undefined) return explicit;
   try {
-    const player = engine.getPlayer?.();
+    const player = engine.findPlayer?.();
     if (player && !player._destroyed) {
       const p = player.position;
       if (p && [p.x, p.y, p.z].every(Number.isFinite)) return [p.x, p.y, p.z];

@@ -19,6 +19,20 @@ const SWIM_MAX_DOWN_SPEED = 3;
 const SWIM_MAX_UP_SPEED = 4;
 const SWIM_BOOST = 2.2;
 
+function sameRapierHandle(first, second) {
+  if (!first || !second) return false;
+  const firstHandle = typeof first === 'number' ? first : first.handle;
+  const secondHandle = typeof second === 'number' ? second : second.handle;
+  return firstHandle !== undefined && secondHandle !== undefined
+    && firstHandle === secondHandle;
+}
+
+function isExcludedCollider(collider, excluded) {
+  if (!collider || !excluded) return false;
+  if (sameRapierHandle(collider, excluded)) return true;
+  return sameRapierHandle(collider.parent?.(), excluded.parent?.());
+}
+
 export class FirstPersonMovementController {
   /**
    * @param {object} opts
@@ -36,6 +50,10 @@ export class FirstPersonMovementController {
     this.velocity = new THREE.Vector3();
     this.horizVelocity = new THREE.Vector3();
     this.knockbackVelocity = new THREE.Vector3();
+    this.lastInputMovement = new THREE.Vector3();
+    this.lastFilteredInputMovement = new THREE.Vector3();
+    this.droneContactNormal = new THREE.Vector3();
+    this.droneContactActive = false;
     this.grounded = false;
     this._jumpsUsed = 0;
     this._justJumped = false;
@@ -47,7 +65,10 @@ export class FirstPersonMovementController {
     this.contactDiagnosticEnabled = false;
     this.lastMovementContactSnapshot = null;
 
-    this.controller = physics.createCharacterController(0.05);
+    // Rapier keeps this gap between the capsule and queried obstacles. DroneA
+    // uses the same value when calculating a coordinated push.
+    this.characterControllerOffset = 0.05;
+    this.controller = physics.createCharacterController(this.characterControllerOffset);
     this.controller.enableAutostep(0.4, 0.2, true);
     this.controller.enableSnapToGround(0.3);
     this.controller.setSlideEnabled(true);
@@ -84,13 +105,18 @@ export class FirstPersonMovementController {
     if (wish.lengthSq() > 1) wish.normalize();
 
     const moveDir = wish.clone();
+    this.lastInputMovement.copy(moveDir);
+    const filteredMoveDir = this._filterDroneContactMovement(moveDir.clone());
+    this.lastFilteredInputMovement.copy(filteredMoveDir);
     const walkSpeed = settings.walkSpeed * (swimming ? SWIM_SPEED_SCALE : 1);
-    const targetHoriz = wish.multiplyScalar(walkSpeed);
+    const targetHoriz = filteredMoveDir.clone().multiplyScalar(walkSpeed);
     if (!this.grounded && !swimming) {
       targetHoriz.multiplyScalar(settings.airControl);
     }
 
-    const hasWish = moveDir.lengthSq() > 0.0001;
+    const currentHoriz = this._filterDroneContactMovement(this.horizVelocity.clone());
+    this.horizVelocity.copy(currentHoriz);
+    const hasWish = filteredMoveDir.lengthSq() > 0.0001;
     const rate = swimming
       ? (hasWish ? 6 : 10) * dt
       : (hasWish ? settings.acceleration : settings.deceleration) * dt;
@@ -129,7 +155,6 @@ export class FirstPersonMovementController {
       filter
     );
     const corrected = this.controller.computedMovement();
-
     this.lastMovementContactSnapshot = null;
     if (this.contactDiagnosticEnabled) {
       this.lastMovementContactSnapshot = {
@@ -160,7 +185,7 @@ export class FirstPersonMovementController {
     }
 
     this._collectCharacterContacts();
-    this._pushDynamicBodies(moveDir, dt, walkSpeed);
+    this._pushDynamicBodies(filteredMoveDir, dt, walkSpeed);
     if (!swimming && this.velocity.y > 0 && this._hasCeilingContact()) {
       this.velocity.y = 0;
     }
@@ -196,6 +221,81 @@ export class FirstPersonMovementController {
     this.knockbackVelocity.x += velocity.x;
     this.knockbackVelocity.z += velocity.z;
     this.velocity.y += velocity.y;
+  }
+
+  /**
+   * DroneA publishes a normal pointing from its body toward the player.
+   * Only player-controlled horizontal motion into that normal is removed.
+   */
+  _filterDroneContactMovement(movement) {
+    if (!this.droneContactActive || this.droneContactNormal.lengthSq() <= 1e-10) return movement;
+    const inward = movement.dot(this.droneContactNormal);
+    if (inward < 0) movement.addScaledVector(this.droneContactNormal, -inward);
+    return movement;
+  }
+
+  setDroneContact(active, normal = null) {
+    this.droneContactActive = Boolean(active);
+    if (normal) this.droneContactNormal.copy(normal).setY(0).normalize();
+    else this.droneContactNormal.set(0, 0, 0);
+    if (!this.droneContactActive) this.droneContactNormal.set(0, 0, 0);
+  }
+
+  _computeExternalMovement(delta, { excludeCollider = null } = {}) {
+    const requested = { x: delta.x, y: delta.y ?? 0, z: delta.z };
+    this.controller.computeColliderMovement(
+      this.collider,
+      requested,
+      this.physics.RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,
+      undefined,
+      excludeCollider ? collider => !isExcludedCollider(collider, excludeCollider) : undefined,
+    );
+    const corrected = this.controller.computedMovement();
+    const snapshot = {
+      requested: { x: requested.x, y: requested.y, z: requested.z },
+      corrected: { x: corrected.x, y: corrected.y, z: corrected.z },
+      contacts: [],
+    };
+    for (let i = 0; i < this.controller.numComputedCollisions(); i++) {
+      const collision = this.controller.computedCollision(i);
+      if (!collision?.collider) continue;
+      snapshot.contacts.push({
+        handle: collision.collider.handle,
+        bodyHandle: collision.collider.parent?.()?.handle,
+        normal: collision.normal1
+          ? [collision.normal1.x, collision.normal1.y, collision.normal1.z]
+          : [0, 0, 0],
+      });
+    }
+    this.lastMovementContactSnapshot = snapshot;
+    return {
+      movement: new THREE.Vector3(corrected.x, corrected.y, corrected.z),
+      snapshot,
+    };
+  }
+
+  /** Query external movement without changing the player's transform. */
+  computeExternalMovement(delta, options = {}) {
+    return this._computeExternalMovement(delta, options);
+  }
+
+  /** Commit movement returned by computeExternalMovement(). */
+  commitExternalMovement(movement) {
+    const pos = this.body.translation();
+    const next = {
+      x: pos.x + movement.x,
+      y: pos.y + movement.y,
+      z: pos.z + movement.z,
+    };
+    this.body.setNextKinematicTranslation(next);
+    this.body.setTranslation(next, true);
+    return new THREE.Vector3(movement.x, movement.y, movement.z);
+  }
+
+  /** Apply externally requested horizontal movement through the same character controller used by the player. */
+  applyExternalMovement(delta, options = {}) {
+    const result = this.computeExternalMovement(delta, options);
+    return this.commitExternalMovement(result.movement);
   }
 
   get swimming() {

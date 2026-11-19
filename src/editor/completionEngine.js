@@ -81,7 +81,7 @@ function escapeRegExp(value) {
 
 /**
  * Keep the API's own syntax. Only strip accidental source wrappers
- * such as "const player = getPlayer()" or a leading "await ".
+ * such as "const player = findPlayer()" or a leading "await ".
  *
  * Never reduce a rich scaffold that already starts at the API name.
  * "onKeyDown("KeyE", () => {})" stays fully intact.

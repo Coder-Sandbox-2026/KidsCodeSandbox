@@ -89,18 +89,18 @@ export const CHALLENGES = Object.freeze([
   "id": 10,
   "title": "Challenge 10 \u2014 Meet the Player",
   "objective": "Get the player object and save it in a variable.",
-  "example": "const player = getPlayer();",
-  "help": "getPlayer() gives your code access to the player in the game. const player = saves it in a variable for later. const means this variable is not meant to be assigned something else.",
-  "helpExample": "const player = getPlayer();",
-  "validation": "getPlayer"
+  "example": "const player = findPlayer();",
+  "help": "findPlayer() gives your code access to the player in the game. const saves it in a variable for later. const means this variable is not meant to be assigned something else.",
+  "helpExample": "const player = findPlayer();",
+  "validation": "findPlayer"
 }),
   Object.freeze({
   "id": 11,
   "title": "Challenge 11 \u2014 Jump Higher",
   "objective": "Get the player and change the player's jump force.",
-  "example": "const player = getPlayer();\nplayer.setJumpForce(20);",
+  "example": "const player = findPlayer();\nplayer.setJumpForce(20);",
   "help": "The first line gets the player. The second calls one of the player's functions. setJumpForce(20) changes how strongly the player jumps. A larger force generally makes a higher jump.",
-  "helpExample": "const player = getPlayer();\nplayer.setJumpForce(20);",
+  "helpExample": "const player = findPlayer();\nplayer.setJumpForce(20);",
   "validation": "setJumpForce"
 }),
   Object.freeze({
@@ -138,5 +138,32 @@ export const CHALLENGES = Object.freeze([
   "help": "function tells JavaScript you are creating a function. sayHello is the name. () is part of the function declaration and call. { } contains the instructions. Creating a function does not run it automatically, so sayHello(); calls it.",
   "helpExample": "function sayHello() {\n  print(\"Hello from my function!\");\n}\n\nsayHello();",
   "validation": "functionCall"
+}),
+  Object.freeze({
+  "id": 16,
+  "title": "Challenge 16 — Unlock a Door",
+  "objective": "Find the yellow door and unlock it with code.",
+  "example": "let door = findDoorYellow();\ndoor.lockDoor(false);",
+  "help": "findDoorYellow() finds the yellow door. lockDoor(false) unlocks it so the player can open it.",
+  "helpExample": "let door = findDoorYellow();\ndoor.lockDoor(false);",
+  "validation": "yellowDoorUnlock"
+}),
+  Object.freeze({
+  "id": 17,
+  "title": "Challenge 17 — Unlock on Collision",
+  "objective": "When the player touches the green key, unlock the green door.",
+  "example": "let door = findDoorGreen();\nlet key = findKeyGreen();\nlet player = findPlayer();\n\nkey.onCollision((other) => {\n  if (other === player) {\n    door.lockDoor(false);\n  }\n});",
+  "help": "Find the green door, green key, and player. Then use the key's collision event and an if statement so only the player unlocks the door.",
+  "helpExample": "let door = findDoorGreen();\nlet key = findKeyGreen();\nlet player = findPlayer();\n\nkey.onCollision((other) => {\n  if (other === player) {\n    door.lockDoor(false);\n  }\n});",
+  "validation": "greenDoorCollision"
+}),
+  Object.freeze({
+  "id": 18,
+  "title": "Challenge 18 — Make a List!",
+  "objective": "Create an array of colors, then use one of those colors when creating a cube.",
+  "example": "let colors = [\"red\", \"green\", \"blue\"];\n\ncreateCube({\n  color: colors[2],\n  physics: true,\n  scale: 200\n});",
+  "help": "An array stores multiple values in one variable. Use square brackets [] and commas to make a list, then use an index such as colors[0] to retrieve a value. Remember that array indexes start at 0. Use the retrieved color for the cube's color property.",
+  "helpExample": "let colors = [\"red\", \"green\", \"blue\"];\n\ncreateCube({\n  color: colors[2]\n});",
+  "validation": "arrayCubeColor"
 })
 ]);

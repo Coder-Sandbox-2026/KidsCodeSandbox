@@ -445,6 +445,12 @@ html, body {
 }
 .success-dialog::backdrop { background: rgba(17, 17, 27, .85); }
 .success-dialog button:disabled { opacity: .45; cursor: not-allowed; }
+.player-caught-dialog { color: #cdd6f4; }
+.player-caught-dialog::backdrop { background: rgba(17, 17, 27, .85); }
+.player-caught-red-overlay {
+  position: absolute; inset: 0; z-index: 40;
+  background: #d20f39; opacity: 0; pointer-events: none;
+}
 .success-flash {
   position: fixed; inset: 0; z-index: 10000;
   background: #fff; opacity: 0; pointer-events: none;

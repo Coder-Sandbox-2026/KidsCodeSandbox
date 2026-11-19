@@ -2,10 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { PLAYER_HEIGHT } from '../api/Player.js';
 import { ChallengeLevel1 } from './ChallengeLevel1.js';
-import { authoredAssociationKey } from './collisionMeshes.js';
 import { processGLBStage } from './GLBStageProcessor.js';
-import { InteractionSystem, boundsFromPart, INTERACTION_KEY_LABEL } from './InteractionSystem.js';
-import { Door } from './Door.js';
 import { cleanupImportedShadows } from './importedShadows.js';
 
 const PLAYER_START_NAME = 'PLAYER_START';
@@ -88,13 +85,13 @@ export function playerDirectionFromMarker(marker) {
   return direction.normalize().toArray();
 }
 
-function extractSpawn(root) {
+export function extractPlayerSpawn(root, label = 'GLTF level') {
   root.updateMatrixWorld(true);
   const markers = [];
   root.traverse(object => { if (isPlayerStartNode(object)) markers.push(object); });
-  if (!markers.length) throw new Error('[level-13] stage13.glb is missing PLAYER_START.');
+  if (!markers.length) throw new Error(`[${label}] GLTF scene is missing PLAYER_START.`);
   if (markers.length > 1) {
-    console.warn(`[level-13] stage13.glb contains ${markers.length} PLAYER_START objects; using the first in scene traversal order.`);
+    console.warn(`[${label}] GLTF scene contains ${markers.length} PLAYER_START objects; using the first in scene traversal order.`);
   }
   const marker = markers[0];
   const worldPosition = marker.getWorldPosition(new THREE.Vector3());
@@ -120,7 +117,7 @@ export async function prepareChallengeLevel13({ modelLoader } = {}) {
       const gltf = await loaderFactory(source.manager).loadAsync(source.url);
       stageTemplate = gltf.scene;
       stageTemplate.updateMatrixWorld(true);
-      stageSpawn = extractSpawn(stageTemplate);
+      stageSpawn = extractPlayerSpawn(stageTemplate, 'level-13');
       return;
     } catch (error) {
       stageLoadError = error;
@@ -143,6 +140,7 @@ export class ChallengeLevel13 extends ChallengeLevel1 {
     this._onDoorTestKeyDown = null;
     this._doorDiagnosticSamples = 0;
     this._doorDiagnosticSignature = '';
+    this.drones = [];
   }
 
   build() {
@@ -158,105 +156,30 @@ export class ChallengeLevel13 extends ChallengeLevel1 {
     this.meshes.push(this.stageRoot);
     this.stageRoot.updateMatrixWorld(true);
 
-    const { stageInteractionParts } = processGLBStage(this.stageRoot, {
+    const { drones, doors } = processGLBStage(this.stageRoot, {
       engine: this.engine,
       physics: this.physics,
       physicsBodies: this.physicsBodies,
     });
+    this.drones = drones;
+    this.doors = doors?.doors ?? new Map();
+    this.interactionSystem = doors?.interactionSystem ?? null;
+    this._doorSystem = doors;
+    for (const drone of this.drones) this.meshes.push(drone.root);
 
-    this._buildDoorInteractions(stageInteractionParts);
     console.info(`[RedKeyDebug] Active Red Keys after Level 13 initialization: ${this.engine?.redKeys?.size ?? 0}.`);
 
     this.playerSpawn = stageSpawn;
     this._buildClouds();
   }
 
-  _buildDoorInteractions(stageInteractionParts) {
-    const colors = ['Red', 'Green', 'Yellow', 'Blue'];
-    for (const color of colors) this._buildDoorInteraction(color, stageInteractionParts);
-    this.door = this.doors.get('red') ?? null;
-  }
-
-  _buildDoorInteraction(color, stageInteractionParts) {
-    const association = authoredAssociationKey(`Door${color}`);
-    const triggerPart = stageInteractionParts.find(part => part.role === 'trigger' && part.associationKey === association);
-    const colliderPart = stageInteractionParts.find(part => part.role === 'movcol' && part.associationKey === association);
-    if (!triggerPart || !colliderPart) {
-      return;
-    }
-
-    let doorObject = null;
-    this.stageRoot.traverse(object => {
-      if (doorObject || object === this.stageRoot) return;
-      if (authoredAssociationKey(object.name) !== colliderPart.associationKey) return;
-      let hasVisibleMesh = false;
-      object.traverse(child => { if (child.isMesh && child.visible) hasVisibleMesh = true; });
-      if (hasVisibleMesh) doorObject = object;
-    });
-    if (!doorObject) {
-      console.warn(`[level-13] Could not find the visible object for ${colliderPart.name}.`);
-      return;
-    }
-
-    this.stageRoot.updateMatrixWorld(true);
-    const doorBounds = new THREE.Box3().setFromObject(doorObject);
-    const floorY = colliderPart.ty - colliderPart.hy;
-    const travelDistance = Math.max(colliderPart.hy * 2 + 0.25, doorBounds.max.y - floorY + 0.25);
-    const door = new Door({
-      physics: this.physics,
-      object: doorObject,
-      colliderPart,
-      travel: new THREE.Vector3(0, -travelDistance, 0),
-      locked: true,
-      keyColor: color.toLowerCase(),
-    });
-    if (this.engine?.player?.movementController) {
-      this.engine.player.movementController.contactDiagnosticEnabled = true;
-    }
-    const promptHost = typeof document === 'undefined'
-      ? null
-      : document.getElementById('viewport-pane');
-    this.doors.set(color.toLowerCase(), door);
-    this.interactionSystem ??= new InteractionSystem({
-      getPlayer: () => this.engine?.player,
-      isActive: () => this.engine?.level === this && this.engine?.levelId === 'challenge-13',
-      promptHost,
-    });
-    this.interactionSystem.register({
-      bounds: boundsFromPart(triggerPart),
-      object: doorObject,
-      label: `${INTERACTION_KEY_LABEL} Open Door`,
-      isAvailable: () => door.target === 0 && door.value === 0,
-      onInteract: () => {
-        if (door.target !== 0 || door.value !== 0) return false;
-        if (door.locked && door.target === 0 && door.value === 0) {
-          this.interactionSystem.notify('This door is locked.');
-          return false;
-        }
-        if (door.target === 0 && door.value === 0) return door.setOpen(true);
-        return false;
-      },
-    });
-
-    this._onDoorTestKeyDown = event => {
-      if (event.code !== 'Digit1' || event.repeat || !this.engine
-        || this.engine.level !== this || this.engine.levelId !== 'challenge-13') return;
-      if (event.target?.closest?.('input, textarea, select, button, [contenteditable], .monaco-editor, dialog')) return;
-      if (!this.engine.player?.input?.active) return;
-      if (door.setOpen(false, moving => !moving.containsPlayerAtClosedPosition(this.engine.player))) {
-        event.preventDefault();
-      }
-    };
-    if (!this._onDoorTestKeyDown && typeof document !== 'undefined') document.addEventListener('keydown', this._onDoorTestKeyDown);
-  }
-
   updateBeforePhysics(dt) {
-    for (const door of this.doors.values()) door.update(dt);
+    this._doorSystem?.update(dt);
   }
 
-  update() {
+  update(dt, frameId) {
+    if (this.engine?.level === this) for (const drone of this.drones) drone.controller.update(dt, frameId);
     this._diagnoseDoorContact();
-    this.interactionSystem?.update();
   }
 
   /** Temporary bounded diagnostic for the reported Level 13 sticking case. */
@@ -312,18 +235,20 @@ export class ChallengeLevel13 extends ChallengeLevel1 {
     if (typeof document !== 'undefined' && this._onDoorTestKeyDown) {
       document.removeEventListener('keydown', this._onDoorTestKeyDown);
     }
-    this.interactionSystem?.dispose();
-    for (const door of this.doors.values()) door.dispose();
+    this._doorSystem?.clear();
     if (this.engine?.player?.movementController) {
       this.engine.player.movementController.contactDiagnosticEnabled = false;
       this.engine.player.movementController.lastMovementContactSnapshot = null;
     }
     this.interactionSystem = null;
+    this._doorSystem = null;
     this.door = null;
     this.doors.clear();
     this._onDoorTestKeyDown = null;
     this._doorDiagnosticSamples = 0;
     this._doorDiagnosticSignature = '';
+    for (const drone of this.drones) drone.controller.clear();
+    this.drones = [];
     cleanupImportedShadows(this.stageRoot);
     super.clear();
     this.stageRoot = null;

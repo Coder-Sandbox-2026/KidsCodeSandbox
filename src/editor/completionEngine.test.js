@@ -15,7 +15,7 @@ function item(label, completion) {
   return { label, kind: 'Function', completion: { kind: 'token', ...completion } };
 }
 
-const getPlayer = findCompletion('getPlayer');
+const findPlayer = findCompletion('findPlayer');
 const createCube = findCompletion('createCube');
 const onKeyDown = findCompletion('onKeyDown');
 const onKeyPressed = findCompletion('onKeyPressed');
@@ -48,16 +48,16 @@ function insertOf(api, line, token, level) {
 test('assignment: only the partial identifier is replaced', () => {
   const line = 'const player = get';
   const start = wordStart(line, 'get');
-  assert.equal(complete(line, start, getPlayer, 'off'), 'const player = getPlayer');
-  assert.equal(complete(line, start, getPlayer, 'basic'), 'const player = getPlayer();');
-  assert.equal(complete(line, start, getPlayer, 'guided'), 'const player = getPlayer();');
-  assert.equal(complete(line, start, getPlayer, 'high'), 'const player = getPlayer();');
-  assert.doesNotMatch(complete(line, start, getPlayer, 'high'), /const player = const player/);
+  assert.equal(complete(line, start, findPlayer, 'off'), 'const player = findPlayer');
+  assert.equal(complete(line, start, findPlayer, 'basic'), 'const player = findPlayer();');
+  assert.equal(complete(line, start, findPlayer, 'guided'), 'const player = findPlayer();');
+  assert.equal(complete(line, start, findPlayer, 'high'), 'const player = findPlayer();');
+  assert.doesNotMatch(complete(line, start, findPlayer, 'high'), /const player = const player/);
 });
 
 test('let / var assignments keep the declaration', () => {
-  assert.equal(complete('let player = get', wordStart('let player = get', 'get'), getPlayer, 'basic'), 'let player = getPlayer();');
-  assert.equal(complete('var player = get', wordStart('var player = get', 'get'), getPlayer, 'basic'), 'var player = getPlayer();');
+  assert.equal(complete('let player = find', wordStart('let player = find', 'find'), findPlayer, 'basic'), 'let player = findPlayer();');
+  assert.equal(complete('var player = find', wordStart('var player = find', 'find'), findPlayer, 'basic'), 'var player = findPlayer();');
   assert.equal(complete('const cube = create', wordStart('const cube = create', 'create'), createCube, 'basic'), 'const cube = createCube();');
 });
 
@@ -72,48 +72,48 @@ test('member access keeps the object prefix', () => {
 });
 
 test('nested expressions keep surrounding source', () => {
-  assert.equal(complete('print(get', 7, getPlayer, 'basic'), 'print(getPlayer()');
-  assert.equal(complete('print(get', 7, getPlayer, 'high'), 'print(getPlayer()');
-  assert.equal(complete('distance(get', 10, getPlayer, 'basic'), 'distance(getPlayer()');
-  assert.equal(complete('if (get', 5, getPlayer, 'basic'), 'if (getPlayer()');
-  assert.equal(complete('random(get', 8, getPlayer, 'basic'), 'random(getPlayer()');
+  assert.equal(complete('print(find', 7, findPlayer, 'basic'), 'print(findPlayer()');
+  assert.equal(complete('print(find', 7, findPlayer, 'high'), 'print(findPlayer()');
+  assert.equal(complete('distance(find', 10, findPlayer, 'basic'), 'distance(findPlayer()');
+  assert.equal(complete('if (find', 5, findPlayer, 'basic'), 'if (findPlayer()');
+  assert.equal(complete('random(find', 8, findPlayer, 'basic'), 'random(findPlayer()');
 });
 
 test('whitespace before the token is preserved', () => {
-  const line = 'const player =     get';
-  const start = wordStart(line, 'get');
-  assert.equal(complete(line, start, getPlayer, 'basic'), 'const player =     getPlayer();');
+  const line = 'const player =     find';
+  const start = wordStart(line, 'find');
+  assert.equal(complete(line, start, findPlayer, 'basic'), 'const player =     findPlayer();');
 });
 
 test('already-typed parentheses are not duplicated', () => {
-  assert.equal(complete('getPlayer(', 1, getPlayer, 'high'), 'getPlayer(');
+  assert.equal(complete('findPlayer(', 1, findPlayer, 'high'), 'findPlayer(');
   assert.equal(complete('createCube(', 1, createCube, 'high'), 'createCube(');
   assert.equal(complete('onKeyDown(', 1, onKeyDown, 'high'), 'onKeyDown(');
 });
 
 test('mid-line comment after the token is preserved', () => {
-  const line = 'const player = get // note';
-  const start = wordStart(line, 'get');
-  assert.equal(complete(line, start, getPlayer, 'basic'), 'const player = getPlayer(); // note');
+  const line = 'const player = find // note';
+  const start = wordStart(line, 'find');
+  assert.equal(complete(line, start, findPlayer, 'basic'), 'const player = findPlayer(); // note');
 });
 
 test('callback body assignment', () => {
-  const line = '    const player = get';
-  const start = wordStart(line, 'get');
-  assert.equal(complete(line, start, getPlayer, 'high'), '    const player = getPlayer();');
+  const line = '    const player = find';
+  const start = wordStart(line, 'find');
+  assert.equal(complete(line, start, findPlayer, 'high'), '    const player = findPlayer();');
 });
 
 test('accidental full-statement templates are clipped to the token', () => {
-  const wrapped = item('getPlayer', {
-    off: 'getPlayer',
-    basic: 'getPlayer()',
-    guided: 'getPlayer()',
-    high: 'const player = getPlayer();',
+  const wrapped = item('findPlayer', {
+    off: 'findPlayer',
+    basic: 'findPlayer()',
+    guided: 'findPlayer()',
+    high: 'const player = findPlayer();',
   });
-  const line = 'const player = get';
-  const start = wordStart(line, 'get');
-  assert.equal(complete(line, start, wrapped, 'high'), 'const player = getPlayer();');
-  assert.equal(asTokenTemplate('getPlayer', 'const player = getPlayer();'), 'getPlayer();');
+  const line = 'const player = find';
+  const start = wordStart(line, 'find');
+  assert.equal(complete(line, start, wrapped, 'high'), 'const player = findPlayer();');
+  assert.equal(asTokenTemplate('findPlayer', 'const player = findPlayer();'), 'findPlayer();');
   assert.equal(asTokenTemplate('wait', 'await wait(1000)'), 'wait(1000)');
 });
 
@@ -132,14 +132,14 @@ test('assignment property templates only apply after a dot', () => {
 });
 
 test('buildCompletion range is always the word columns', () => {
-  const built = buildCompletion(getPlayer, {
+  const built = buildCompletion(findPlayer, {
     level: 'high',
-    line: 'const player = get',
+    line: 'const player = find',
     wordStartColumn: 16,
-    wordEndColumn: 19,
+    wordEndColumn: 20,
   });
-  assert.deepEqual(built.range, { startColumn: 16, endColumn: 19 });
-  assert.equal(replaceWord('const player = get', 16, 19, built.insertText), 'const player = getPlayer();');
+  assert.deepEqual(built.range, { startColumn: 16, endColumn: 20 });
+  assert.equal(replaceWord('const player = find', 16, 20, built.insertText), 'const player = findPlayer();');
   assert.doesNotMatch(built.insertText, /const player/);
 });
 
@@ -151,20 +151,20 @@ test('comments and strings are ignorable contexts', () => {
 
 // --- Dimension B: Code Coach richness from live API metadata ---
 
-test('live getPlayer metadata is token-scoped, not a statement snippet', () => {
-  assert.equal(getPlayer.completion.off, 'getPlayer');
-  assert.equal(getPlayer.completion.basic, 'getPlayer()');
-  assert.equal(getPlayer.completion.guided, 'getPlayer()');
-  assert.equal(getPlayer.completion.high, 'getPlayer()');
-  assert.doesNotMatch(getPlayer.completion.high, /const player/);
+test('live findPlayer metadata is token-scoped, not a statement snippet', () => {
+  assert.equal(findPlayer.completion.off, 'findPlayer');
+  assert.equal(findPlayer.completion.basic, 'findPlayer()');
+  assert.equal(findPlayer.completion.guided, 'findPlayer()');
+  assert.equal(findPlayer.completion.high, 'findPlayer()');
+  assert.doesNotMatch(findPlayer.completion.high, /const player/);
 });
 
-test('getPlayer Code Coach levels after const player = get', () => {
-  const line = 'const player = get';
-  assert.equal(complete(line, wordStart(line, 'get'), getPlayer, 'off'), 'const player = getPlayer');
-  assert.equal(complete(line, wordStart(line, 'get'), getPlayer, 'basic'), 'const player = getPlayer();');
-  assert.equal(complete(line, wordStart(line, 'get'), getPlayer, 'guided'), 'const player = getPlayer();');
-  assert.equal(complete(line, wordStart(line, 'get'), getPlayer, 'high'), 'const player = getPlayer();');
+test('findPlayer Code Coach levels after const player = find', () => {
+  const line = 'const player = find';
+  assert.equal(complete(line, wordStart(line, 'find'), findPlayer, 'off'), 'const player = findPlayer');
+  assert.equal(complete(line, wordStart(line, 'find'), findPlayer, 'basic'), 'const player = findPlayer();');
+  assert.equal(complete(line, wordStart(line, 'find'), findPlayer, 'guided'), 'const player = findPlayer();');
+  assert.equal(complete(line, wordStart(line, 'find'), findPlayer, 'high'), 'const player = findPlayer();');
 });
 
 test('onKeyDown High keeps parameter and callback scaffold', () => {

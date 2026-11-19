@@ -17,6 +17,7 @@ import { mountSuccessUI } from './challenges/SuccessUI.js';
 import { MobileControls } from './ui/MobileControls.js';
 import { LoopLimitError } from './engine/loopGuard.js';
 import { isAccessibleLevel } from './config/levelAccess.js';
+import { PlayerCaughtSequence } from './engine/PlayerCaughtSequence.js';
 
 // ===== Application State =====
 const AppState = {
@@ -54,7 +55,7 @@ const AppState = {
     this.level = isAccessibleLevel(level) ? level : 1;
     level = this.level;
     const btn = document.getElementById('btn-level');
-    btn.textContent = `Level ${level} ▾`;
+    btn.textContent = level === 16 ? 'Drone Test ▾' : `Level ${level} ▾`;
     document.querySelectorAll('#level-menu button').forEach(b => b.classList.toggle('active', parseInt(b.dataset.level) === level));
   },
 
@@ -180,17 +181,26 @@ const challengeResetBtn = document.getElementById('btn-challenge-reset');
   }
 
   // ---- Editor ----
-  const editor = new EditorManager(editorContainer, { getPlayerPosition: () => engine.getPlayer()?.position });
+  const editor = new EditorManager(editorContainer, { getPlayerPosition: () => engine.findPlayer()?.position });
 
   // ---- Engine ----
   const engine = new GameEngine(gameContainer, { fpsDebug: true });
   await engine.init();
+  const caughtSequence = new PlayerCaughtSequence({
+    engine,
+    host: document.getElementById('viewport-pane'),
+    restart: () => resetGame(),
+  });
+  engine.caughtSequence = caughtSequence;
   engine.loadLevel(selectedStage(AppState).levelId);
 
   // ---- API ----
   const api = new GameAPI(engine, hudOverlay, logToConsole, () => {
     consoleOutput.innerHTML = '';
   });
+  // Internal systems such as DroneA use the same on-screen HUD as student
+  // print(), without exposing the GameAPI instance to level code.
+  engine.onScreenPrint = (text, opts) => api.hud.print(text, opts);
 
   if (engine.modelLoadError) {
     logToConsole('⚠️ A 3D model did not load: ' + engine.modelLoadError.message, 'error');
@@ -208,8 +218,10 @@ const challengeResetBtn = document.getElementById('btn-challenge-reset');
   window.addEventListener('focus', updateMusicVolume);
   document.addEventListener('focusin', updateMusicVolume);
   function stopGame({ preserveSuccess = false, stopMusic = false } = {}) {
+    caughtSequence.cancel({ restorePlayer: false });
     if (!preserveSuccess) successUI?.cancel();
     currentChallengeRun = null;
+    engine.audio.stopTransientAudio?.();
     const wasRunning = engine.running;
     if (stopMusic) engine.audio.stopMusic();
     engine.stop();
@@ -225,8 +237,10 @@ const challengeResetBtn = document.getElementById('btn-challenge-reset');
   // ---- Pointer lock ----
   // Clicking the play overlay OR the game container requests pointer lock
   const requestLock = () => {
+    if (caughtSequence.isActive()) return;
     gameContainer.focus({ preventScroll: true });
     engine.audio.playMusicForLevel(engine.levelId);
+    engine.audio.resume?.();
     engine.resume();
     updateMusicVolume();
     if (mobileControls?.supported) {
@@ -240,6 +254,7 @@ const challengeResetBtn = document.getElementById('btn-challenge-reset');
   gameContainer.addEventListener('click', requestLock);
 
   document.addEventListener('pointerlockchange', () => {
+    if (caughtSequence.isActive()) return;
     const locked = !!document.pointerLockElement;
     const viewportPane = document.getElementById('viewport-pane');
     const waterDebugPointerFree = document.fullscreenElement === viewportPane
@@ -261,6 +276,7 @@ const challengeResetBtn = document.getElementById('btn-challenge-reset');
   let challengeStar = null;
   const selectedLevelId = () => selectedStage(AppState).levelId;
   async function runCode() {
+    caughtSequence.cancel({ restorePlayer: false });
     successUI?.cancel();
     // Select the environment before creating a run: switching invalidates runs.
     engine.loadLevel(selectedLevelId());
@@ -323,6 +339,7 @@ const challengeResetBtn = document.getElementById('btn-challenge-reset');
     onAdvance: selectChallenge,
   });
   function resetGame({ runStudentCode = true } = {}) {
+    caughtSequence.cancel({ restorePlayer: false });
     successUI?.cancel();
     challengeUI.close();
     if (document.pointerLockElement) {
@@ -346,7 +363,7 @@ const challengeResetBtn = document.getElementById('btn-challenge-reset');
   });
   mobileControls = new MobileControls({
     host: document.getElementById('viewport-pane'),
-    getInput: () => engine.getPlayer()?.input,
+    getInput: () => engine.findPlayer()?.input,
     isGameActive: () => engine.running,
     escapeAction: escapeGameplay,
     primaryAction: () => {

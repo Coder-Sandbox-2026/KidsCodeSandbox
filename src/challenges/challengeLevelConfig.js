@@ -1,5 +1,5 @@
 // Final body-center starts and completion rewards for all challenge stages.
-export const CHALLENGE_LEVEL_CONFIG = Object.freeze(Object.fromEntries([
+export const CHALLENGE_LEVEL_CONFIG = Object.freeze(Object.assign(Object.fromEntries([
   [[-22.520, 2.700, -18.584], [-0.589, 0, 0.808], [23.7, 6, -20.4], 0.2],
   [[-7.671, 0.950, 41.289], [-0.965, 0, -0.262], [11, 8, -19.6], 0.2],
   [[-3.272, 0.950, -3.906], [0.998, 0, 0.057], [-42.6, 2, -29.5], 0.2],
@@ -18,4 +18,12 @@ export const CHALLENGE_LEVEL_CONFIG = Object.freeze(Object.fromEntries([
 ].map(([position, direction, goldStarPosition, scale], index) => [index + 1, Object.freeze({
   playerPosition: Object.freeze(position), playerDirection: Object.freeze(direction),
   goldStar: Object.freeze({ position: Object.freeze(goldStarPosition), scale }),
-})])));
+})])), {
+  16: Object.freeze({
+  goldStar: Object.freeze({ position: Object.freeze([0, 2.5, -21]), scale: 0.2 }),
+  }), 17: Object.freeze({
+  goldStar: Object.freeze({ position: Object.freeze([10, 3.0, 0.0]), scale: 0.2 }),
+  }), 18: Object.freeze({
+  goldStar: Object.freeze({ position: Object.freeze([-40, 2.5, -42]), scale: 0.2 }),
+  }),
+}));

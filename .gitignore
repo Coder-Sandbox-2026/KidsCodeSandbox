@@ -43,3 +43,9 @@ pnpm-debug.log*
 /$_
 /FETCH_HEAD
 /git
+
+# Development-only imported stage fixtures. Keep local copies, but do not commit them.
+/src/assets/Levels/First Person/drone_test.gltf
+/src/assets/Levels/First Person/drone_test.bin
+/src/assets/Levels/First Person/stage13.gltf
+/src/assets/Levels/First Person/stage13.bin
