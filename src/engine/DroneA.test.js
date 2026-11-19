@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import {
   DRONE_CAMERA_EMISSIVE_MULTIPLIER,
   DRONE_EMISSIVE_INTENSITY,
+  DRONE_EMISSIVE_PULSE_MAX,
   DroneA,
 } from './DroneA.js';
 
@@ -26,7 +27,7 @@ test('DroneA preserves the model-authored emissive strength', () => {
   assert.equal(drone.glowMaterial, glow);
   drone.update(0, 1);
   drone.update(0, 2);
-  assert.equal(glow.emissiveIntensity, DRONE_EMISSIVE_INTENSITY);
+  assert.equal(glow.emissiveIntensity, DRONE_EMISSIVE_INTENSITY * DRONE_EMISSIVE_PULSE_MAX);
 });
 
 test('DroneA applies the configured intensity to every emissive material', () => {

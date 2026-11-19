@@ -80,12 +80,13 @@ async function harness(t) {
     mesh: new THREE.Group(),
     onCollision(callback) { this.collisionCallback = callback; },
   };
+  const keyFixtureHost = new THREE.Group();
+  keyFixtureHost.add(greenKey.mesh);
   engine.keys = new Map([['green', new Set([greenKey])]]);
   engine.level = {
     doors: new Map([['yellow', yellowDoor], ['green', greenDoor]]),
     build() {}, clear() {},
   };
-  engine.scene.add(greenKey.mesh);
   engine.levelLoaded = true;
   engine.running = true;
   engine._animId = 1;
